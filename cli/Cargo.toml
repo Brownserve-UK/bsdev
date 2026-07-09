@@ -1,0 +1,13 @@
+[package]
+name = "bsdev"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "bsdev"
+path = "src/main.rs"
+
+[dependencies]
+bsdev-core = { path = "../core" }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
