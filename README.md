@@ -6,6 +6,19 @@ container, from any shell on any OS.
 > [!NOTE]
 > Built for Brownserve projects and conventions, may have limited use outside of that context.
 
+The container comes with:
+
+- git,
+- GitHub CLI (`gh`),
+- chezmoi
+- fish,
+- oh-my-posh,
+- topgrade
+- Node.js / npm
+- Rust (via rustup)
+- tenv
+- Claude Code
+
 ## Install
 
 Grab the latest release and run the installer for your platform:
@@ -31,16 +44,7 @@ starts the container; every run after that just connects you. `code .` inside
 the container opens the folder in your host's VSCode, no manual Remote-SSH
 setup required.
 
-The container comes with:
-
-- git, GitHub CLI (`gh`), chezmoi
-- fish shell, oh-my-posh, topgrade
-- Node.js / npm
-- Rust (via rustup)
-- tenv
-- Claude Code
-
-```
+```plain
 Usage: bsdev [OPTIONS] [COMMAND]
 
 Commands:
