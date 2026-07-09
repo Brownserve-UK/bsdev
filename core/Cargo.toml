@@ -1,0 +1,8 @@
+[package]
+name = "bsdev-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+thiserror = "2"
+directories = "6"

@@ -1,0 +1,121 @@
+---
+name: builds
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+      image: ${{ steps.filter.outputs.image }}
+    steps:
+      - name: check-relevant-changes
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FILES=$(gh pr view ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --json files --jq '.files[].path')
+          # Rust / build changes drive the Rust build+test matrix
+          if echo "$FILES" | grep -iqE '^(Cargo\.toml$|Cargo\.lock$|.*\.rs$|\.build/|\.config/|nuget\.config$)'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No relevant Rust files changed, skipping build"
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Changes under image/ drive the container build smoke test
+          if echo "$FILES" | grep -iqE '^image/'; then
+            echo "image=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No image files changed, skipping container build"
+            echo "image=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The matrix job is named 'build', not 'BuildTestAndCheck', so that its per-OS expanded
+  # check names (build (ubuntu-latest) etc.) are not the ones branch protection requires.
+  build:
+    needs: check-changes
+    if: needs.check-changes.outputs.relevant == 'true'
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      # Step 1: Checkout the repo
+      - name: checkout-repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          path: bsdev
+      # Step 2: Run the build script
+      - name: run-build-script
+        shell: pwsh
+        run: |
+            ./bsdev/.build/build.ps1 `
+              -GitHubRepoName 'bsdev' `
+              -BranchName $env:GITHUB_REF `
+              -Build 'BuildTestAndCheck' `
+              -Verbose
+
+  # Container build smoke test. Only runs when files under image/ change, because the Arch/AUR image
+  # is slow to build and normal Rust PRs should not pay that cost.
+  build-image:
+    needs: check-changes
+    if: needs.check-changes.outputs.image == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      # Step 1: Checkout the repo
+      - name: checkout-repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          path: bsdev
+      # Step 2: Build the Docker image (no push)
+      - name: run-build-script
+        shell: pwsh
+        run: |
+            ./bsdev/.build/build.ps1 `
+              -GitHubRepoName 'bsdev' `
+              -BranchName $env:GITHUB_REF `
+              -Build 'BuildImage' `
+              -Verbose
+
+  # Gate job: always runs (even when 'build'/'build-image' were skipped) and reports the single status
+  # check name that branch protection requires. This keeps the required-check name stable whether or not
+  # relevant changes are present.
+  BuildTestAndCheck:
+    needs: [check-changes, build, build-image]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: evaluate-build-result
+        run: |
+          # check-changes must have succeeded
+          if [ "${{ needs.check-changes.result }}" != "success" ]; then
+            echo "check-changes did not succeed (result: ${{ needs.check-changes.result }})"
+            exit 1
+          fi
+          # relevant Rust changes -> the whole matrix must have succeeded
+          if [ "${{ needs.check-changes.outputs.relevant }}" == "true" ] && [ "${{ needs.build.result }}" != "success" ]; then
+            echo "Build matrix did not succeed (result: ${{ needs.build.result }})"
+            exit 1
+          fi
+          # image changes -> the container build must have succeeded
+          if [ "${{ needs.check-changes.outputs.image }}" == "true" ] && [ "${{ needs.build-image.result }}" != "success" ]; then
+            echo "Container build did not succeed (result: ${{ needs.build-image.result }})"
+            exit 1
+          fi
+          echo "All required jobs succeeded (or were correctly skipped)"
+          exit 0
