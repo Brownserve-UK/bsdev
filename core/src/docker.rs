@@ -97,6 +97,7 @@ mod tests {
             volume: "bsdev-home".to_string(),
             port: 2222,
             user: "bsdev".to_string(),
+            ssh_host: "bsdev".to_string(),
             home_dir: PathBuf::from("/home/host"),
             key_path: PathBuf::from("/home/host/.ssh/bsdev"),
             known_hosts: PathBuf::from("/home/host/.ssh/known_hosts.bsdev"),

@@ -19,6 +19,9 @@ pub struct Settings {
     pub port: u16,
     /// Login user inside the container.
     pub user: String,
+    /// Remote-SSH host alias (`code --remote ssh-remote+<ssh_host>`); matches the
+    /// `Host bsdev` entry chezmoi deploys to ~/.ssh/config.
+    pub ssh_host: String,
     /// The host user's home directory (where the ssh key lives).
     pub home_dir: PathBuf,
     /// Private key used to reach the container.
@@ -39,6 +42,7 @@ impl Settings {
             volume: env_or("BSDEV_VOLUME", "bsdev-home"),
             port: env_or("BSDEV_PORT", "2222").parse().unwrap_or(2222),
             user: env_or("BSDEV_USER", "bsdev"),
+            ssh_host: env_or("BSDEV_SSH_HOST", "bsdev"),
             key_path: ssh.join("bsdev"),
             known_hosts: ssh.join("known_hosts.bsdev"),
             home_dir: home,

@@ -56,7 +56,11 @@ RUN ssh-keygen -A \
         /etc/ssh/sshd_config
 
 COPY bsdev-entrypoint.sh /usr/local/bin/bsdev-entrypoint.sh
-RUN chmod 0755 /usr/local/bin/bsdev-entrypoint.sh
+# In-container `code` shim: opens paths in the host VSCode over the bsdev reverse
+# channel (see image/code). VSCode's own remote-cli takes PATH precedence inside
+# a Remote-SSH integrated terminal, so this only applies to bare bsdev sessions.
+COPY code /usr/local/bin/code
+RUN chmod 0755 /usr/local/bin/bsdev-entrypoint.sh /usr/local/bin/code
 
 EXPOSE 22
 ENTRYPOINT ["/usr/local/bin/bsdev-entrypoint.sh"]

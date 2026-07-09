@@ -1,5 +1,6 @@
 use std::fs;
 
+use crate::codebridge;
 use crate::error::{BsdevError, Result};
 use crate::process;
 use crate::settings::Settings;
@@ -36,6 +37,10 @@ pub fn read_pubkey(settings: &Settings) -> Result<String> {
 pub fn connect_args(settings: &Settings) -> Vec<String> {
     vec![
         "-t".to_string(),
+        // Reverse-forward the code bridge port so the in-container `code` shim can
+        // reach the host listener spawned by codebridge::spawn_listener.
+        "-R".to_string(),
+        format!("127.0.0.1:{p}:127.0.0.1:{p}", p = codebridge::CODE_PORT),
         "-p".to_string(),
         settings.port.to_string(),
         "-i".to_string(),
@@ -72,6 +77,7 @@ mod tests {
             volume: "bsdev-home".to_string(),
             port: 2222,
             user: "bsdev".to_string(),
+            ssh_host: "bsdev".to_string(),
             home_dir: PathBuf::from("/home/host"),
             key_path: PathBuf::from("/home/host/.ssh/bsdev"),
             known_hosts: PathBuf::from("/home/host/.ssh/known_hosts.bsdev"),
@@ -83,6 +89,9 @@ mod tests {
         let a = settings();
         let args = connect_args(&a);
         assert!(args.contains(&"-t".to_string()));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "-R" && w[1] == "127.0.0.1:9918:127.0.0.1:9918"));
         assert!(args.windows(2).any(|w| w[0] == "-p" && w[1] == "2222"));
         assert!(args.windows(2).any(|w| w[0] == "-i" && w[1] == "/home/host/.ssh/bsdev"));
         assert_eq!(args.last().unwrap(), "bsdev@127.0.0.1");
