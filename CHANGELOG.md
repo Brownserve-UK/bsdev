@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release
 
-## [v0.0.0](https://github.com) (1970-01-01)
+## [v0.1.0](https://github.com/Brownserve-UK/bsdev/tree/v0.1.0) (2026-07-09)
 
-Placeholder entry. This will be replaced when you stage your first release.
+### Added
+
+- feat: switch to using devcontainers instead of using remote-ssh. in [#7](https://github.com/Brownserve-UK/bsdev/pull/7) by [@shoddyguard](https://github.com/shoddyguard)
+- feat: install node and rust tooling. in [#6](https://github.com/Brownserve-UK/bsdev/pull/6) by [@shoddyguard](https://github.com/shoddyguard)
+
+### Fixed
+
+- fix: need a reverse channel for `code` to call back to the host in [#5](https://github.com/Brownserve-UK/bsdev/pull/5) by [@shoddyguard](https://github.com/shoddyguard)
+
