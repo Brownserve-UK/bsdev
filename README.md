@@ -41,8 +41,9 @@ put it on your PATH.
 
 Just run `bsdev`. On first run it creates an SSH key, pulls the image and
 starts the container; every run after that just connects you. `code .` inside
-the container opens the folder in your host's VSCode, no manual Remote-SSH
-setup required.
+the container opens the folder in your host's VSCode - no config needed, just
+the [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+extension installed.
 
 ```plain
 Usage: bsdev [OPTIONS] [COMMAND]
