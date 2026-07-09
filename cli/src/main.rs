@@ -31,6 +31,7 @@ fn main() -> Result<()> {
 fn ensure_up(settings: &Settings, verbose: bool) -> Result<()> {
     docker::ensure_available().context("Docker is required to run bsdev")?;
     ssh::ensure_keypair(settings, verbose).context("Failed to create the bsdev ssh key")?;
+    let pubkey = ssh::read_pubkey(settings).context("Failed to read the bsdev public key")?;
 
     if !docker::image_present(&settings.image).context("Failed to inspect the bsdev image")? {
         println!("Pulling {} ...", settings.image);
@@ -45,10 +46,15 @@ fn ensure_up(settings: &Settings, verbose: bool) -> Result<()> {
         }
         ContainerState::Missing => {
             println!("Creating the bsdev container ...");
-            let key = ssh::read_pubkey(settings).context("Failed to read the bsdev public key")?;
-            docker::run_container(settings, &key, verbose).context("Failed to create the container")?;
+            docker::run_container(settings, &pubkey, verbose).context("Failed to create the container")?;
         }
     }
+
+    // Authorise our key inside the container every time: covers a persisted home
+    // volume created with a previous key, or a rotated/relocated host key, so we
+    // never need a recreate to reconnect.
+    docker::ensure_authorized_key(settings, &pubkey, verbose)
+        .context("Failed to authorize the bsdev key in the container")?;
     Ok(())
 }
 

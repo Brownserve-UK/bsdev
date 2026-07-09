@@ -2,14 +2,15 @@
 #
 # bsdev in-container `code` shim.
 #
-# Opens paths in the HOST's VSCode over Remote-SSH via the reverse channel the
-# `bsdev` launcher sets up: it listens on 127.0.0.1:$BSDEV_CODE_PORT on the host
-# and reverse-forwards that port into this container. We just send the absolute
-# path down it; the host then runs `code --remote ssh-remote+bsdev <path>`.
+# Opens paths in the HOST's VSCode via the reverse channel the `bsdev` launcher
+# sets up: it listens on 127.0.0.1:$BSDEV_CODE_PORT on the host and
+# reverse-forwards that port into this container. We send `<kind> <abs-path>`
+# down it (kind = dir|file); the host then attaches VSCode to this container with
+# the Dev Containers extension and opens the path.
 #
-# In a VSCode Remote-SSH integrated terminal, VSCode's own `code` (its remote-cli)
-# is earlier on PATH and wins, so this shim only runs in bare `bsdev` ssh sessions
-# - exactly where the injected `code` isn't available.
+# In a VSCode integrated terminal, VSCode's own `code` (its remote-cli) is earlier
+# on PATH and wins, so this shim only runs in bare `bsdev` ssh sessions - exactly
+# where the injected `code` isn't available.
 #
 set -uo pipefail
 
@@ -25,16 +26,20 @@ for arg in "$@"; do
 done
 
 abs="$(realpath -- "$target" 2>/dev/null || echo "$target")"
+if [ -d "$abs" ]; then kind=dir; else kind=file; fi
 
-# Write the path as a plain redirection on `printf` (not `exec`): a failed
+# Write the request as a plain redirection on `printf` (not `exec`): a failed
 # /dev/tcp connect then just fails the command instead of killing the script.
-if printf '%s\n' "$abs" > "/dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+# The redirect + its stderr are grouped so bash's own "Connection refused" is
+# swallowed (a bare `2>/dev/null` doesn't cover the redirection-open error).
+if { printf '%s %s\n' "$kind" "$abs" > "/dev/tcp/127.0.0.1/$port"; } 2>/dev/null; then
     exit 0
 fi
 
 {
     echo "code: no bsdev VSCode bridge on 127.0.0.1:$port."
     echo "      Connect to this container with the 'bsdev' launcher (not a bare ssh) so the"
-    echo "      bridge is active, or from your host run: code --remote ssh-remote+bsdev '$abs'"
+    echo "      bridge is active. Opening from the host needs VSCode with the Dev Containers"
+    echo "      extension (it attaches to the running '${BSDEV_CONTAINER:-bsdev}' container)."
 } >&2
 exit 1

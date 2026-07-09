@@ -85,6 +85,30 @@ pub fn remove(container: &str, verbose: bool) -> Result<()> {
     process::run(DOCKER, ["rm", "-f", container], verbose)
 }
 
+/// Ensure `pubkey` is present in the container user's authorized_keys. Idempotent
+/// and run on every `up`, so a rotated/relocated host key or a persisted home
+/// volume created with a previous key still authorises without a recreate. The
+/// key is passed via an env var to avoid shell-quoting issues.
+pub fn ensure_authorized_key(settings: &Settings, pubkey: &str, verbose: bool) -> Result<()> {
+    let env = format!("BSDEV_PUB={pubkey}");
+    let script = r#"install -d -m 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && { grep -qxF "$BSDEV_PUB" ~/.ssh/authorized_keys || printf '%s\n' "$BSDEV_PUB" >> ~/.ssh/authorized_keys; }"#;
+    process::run(
+        DOCKER,
+        [
+            "exec",
+            "-u",
+            settings.user.as_str(),
+            "-e",
+            env.as_str(),
+            settings.container.as_str(),
+            "bash",
+            "-c",
+            script,
+        ],
+        verbose,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,10 +121,7 @@ mod tests {
             volume: "bsdev-home".to_string(),
             port: 2222,
             user: "bsdev".to_string(),
-            ssh_host: "bsdev".to_string(),
-            home_dir: PathBuf::from("/home/host"),
-            key_path: PathBuf::from("/home/host/.ssh/bsdev"),
-            known_hosts: PathBuf::from("/home/host/.ssh/known_hosts.bsdev"),
+            key_path: PathBuf::from("/state/bsdev/id_ed25519"),
         }
     }
 
