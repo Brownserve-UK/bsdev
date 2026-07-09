@@ -20,6 +20,7 @@ RUN pacman -Sy --needed --noconfirm archlinux-keyring \
     && pacman -Su --needed --noconfirm \
         base-devel git openssh sudo nano curl \
         github-cli fish fastfetch wget chezmoi \
+        rustup nodejs npm \
     && pacman -Scc --noconfirm
 
 # Create the login user in wheel with validated passwordless sudo (a typo can't
@@ -45,6 +46,14 @@ RUN export HOME="/home/${BSDEV_USER}"; \
     && rm -rf "$tmp" \
     && retry yay -S --needed --noconfirm oh-my-posh-bin tenv-bin topgrade-bin \
     && retry sh -c "curl -fsSL https://claude.ai/install.sh | bash"
+
+# rustup itself comes from the official repos above; install+select the stable
+# toolchain (rustc, cargo, rustfmt, clippy) by default so it's ready out of the
+# box. Retried like the AUR fetches above - it also pulls a fair amount over the
+# network and can hit the same transient CI flakiness.
+RUN export HOME="/home/${BSDEV_USER}"; \
+    retry() { for i in 1 2 3; do "$@" && return 0; echo ">> attempt $i failed: $* - retrying..." >&2; sleep 5; done; return 1; }; \
+    retry rustup default stable
 USER root
 
 # sshd: generate host keys and allow key-based auth only.
@@ -61,6 +70,10 @@ COPY bsdev-entrypoint.sh /usr/local/bin/bsdev-entrypoint.sh
 # a Remote-SSH integrated terminal, so this only applies to bare bsdev sessions.
 COPY code /usr/local/bin/code
 RUN chmod 0755 /usr/local/bin/bsdev-entrypoint.sh /usr/local/bin/code
+
+# Put rustup's cargo/rustc shims on PATH for fish (the container's login shell).
+COPY fish-cargo-path.fish /etc/fish/conf.d/bsdev-cargo-path.fish
+RUN chmod 0644 /etc/fish/conf.d/bsdev-cargo-path.fish
 
 EXPOSE 22
 ENTRYPOINT ["/usr/local/bin/bsdev-entrypoint.sh"]
