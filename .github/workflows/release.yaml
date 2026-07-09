@@ -2,6 +2,12 @@
 name: release
 on:
   workflow_dispatch:
+    inputs:
+      publish_to:
+        description: 'Where to publish the release to'
+        required: true
+        default: '"GitHub", "GHCR", "DockerHub"'
+        type: string
 
 permissions: {}
 
@@ -87,7 +93,7 @@ jobs:
               BranchName              = $env:GITHUB_REF
               GitHubRepoName          = 'bsdev'
               Build                   = 'Release'
-              PublishTo               = @('GitHub', 'GHCR', 'DockerHub')
+              PublishTo               = ${{ inputs.publish_to }}
               GitHubReleaseToken      = $env:GitHubToken
               GHCRToken               = $env:GHCRToken
               DockerHubUsername       = $env:DockerHubUsername
