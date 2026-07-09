@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+# bsdev in-container `code` shim.
+#
+# Opens paths in the HOST's VSCode over Remote-SSH via the reverse channel the
+# `bsdev` launcher sets up: it listens on 127.0.0.1:$BSDEV_CODE_PORT on the host
+# and reverse-forwards that port into this container. We just send the absolute
+# path down it; the host then runs `code --remote ssh-remote+bsdev <path>`.
+#
+# In a VSCode Remote-SSH integrated terminal, VSCode's own `code` (its remote-cli)
+# is earlier on PATH and wins, so this shim only runs in bare `bsdev` ssh sessions
+# - exactly where the injected `code` isn't available.
+#
+set -uo pipefail
+
+port="${BSDEV_CODE_PORT:-9918}"
+
+# The first non-flag argument is the path to open (default: current directory).
+target="."
+for arg in "$@"; do
+    case "$arg" in
+        -*) ;;                     # ignore flags (e.g. -n, --reuse-window)
+        *)  target="$arg"; break ;;
+    esac
+done
+
+abs="$(realpath -- "$target" 2>/dev/null || echo "$target")"
+
+# Write the path as a plain redirection on `printf` (not `exec`): a failed
+# /dev/tcp connect then just fails the command instead of killing the script.
+if printf '%s\n' "$abs" > "/dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+    exit 0
+fi
+
+{
+    echo "code: no bsdev VSCode bridge on 127.0.0.1:$port."
+    echo "      Connect to this container with the 'bsdev' launcher (not a bare ssh) so the"
+    echo "      bridge is active, or from your host run: code --remote ssh-remote+bsdev '$abs'"
+} >&2
+exit 1

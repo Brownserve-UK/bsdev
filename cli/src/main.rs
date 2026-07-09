@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 use bsdev_core::docker::{self, ContainerState};
-use bsdev_core::{ssh, Settings};
+use bsdev_core::{codebridge, ssh, Settings};
 
 mod cli;
 
@@ -54,6 +54,9 @@ fn ensure_up(settings: &Settings, verbose: bool) -> Result<()> {
 
 fn connect(settings: &Settings, verbose: bool) -> Result<()> {
     ensure_up(settings, verbose)?;
+    // Start the host-side `code` bridge listener; the ssh session reverse-forwards
+    // its port so `code .` inside the container opens folders in the host VSCode.
+    codebridge::spawn_listener(settings);
     ssh::connect(settings, verbose).context("Failed to connect to the bsdev container")
 }
 
