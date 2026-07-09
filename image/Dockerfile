@@ -34,14 +34,17 @@ RUN touch /etc/bsdev-container
 
 # AUR tooling + Claude Code, installed as the login user (makepkg refuses to run
 # as root; the native Claude installer drops a self-updating binary in ~/.local/bin).
+# Fetches from aur.archlinux.org are occasionally flaky in CI (transient TLS
+# EOFs), so retry the network-bound steps; --needed keeps retries idempotent.
 USER ${BSDEV_USER}
-RUN export HOME="/home/${BSDEV_USER}" \
-    && tmp="$(mktemp -d)" \
-    && git clone https://aur.archlinux.org/yay-bin.git "$tmp" \
-    && (cd "$tmp" && makepkg -si --noconfirm) \
+RUN export HOME="/home/${BSDEV_USER}"; \
+    retry() { for i in 1 2 3; do "$@" && return 0; echo ">> attempt $i failed: $* - retrying..." >&2; sleep 5; done; return 1; }; \
+    tmp="$(mktemp -d)" \
+    && retry git clone https://aur.archlinux.org/yay-bin.git "$tmp" \
+    && ( cd "$tmp" && makepkg -si --noconfirm ) \
     && rm -rf "$tmp" \
-    && yay -S --needed --noconfirm oh-my-posh-bin tenv-bin topgrade-bin \
-    && curl -fsSL https://claude.ai/install.sh | bash
+    && retry yay -S --needed --noconfirm oh-my-posh-bin tenv-bin topgrade-bin \
+    && retry sh -c "curl -fsSL https://claude.ai/install.sh | bash"
 USER root
 
 # sshd: generate host keys and allow key-based auth only.
