@@ -2,6 +2,12 @@
 name: release
 on:
   workflow_dispatch:
+    inputs:
+      publish_to:
+        description: 'Where to publish the release to'
+        required: true
+        default: '"GitHub", "GHCR", "DockerHub"'
+        type: string
 
 permissions: {}
 
