@@ -93,7 +93,7 @@ jobs:
               BranchName              = $env:GITHUB_REF
               GitHubRepoName          = 'bsdev'
               Build                   = 'Release'
-              PublishTo               = @('GitHub', 'GHCR', 'DockerHub')
+              PublishTo               = ${{ inputs.publish_to }}
               GitHubReleaseToken      = $env:GitHubToken
               GHCRToken               = $env:GHCRToken
               DockerHubUsername       = $env:DockerHubUsername
