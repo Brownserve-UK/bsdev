@@ -7,6 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release
 
-## [v0.0.0](https://github.com) (1970-01-01)
+## [v0.1.0](https://github.com/Brownserve-UK/bsdev/tree/v0.1.0) (2026-07-09)
 
-Placeholder entry. This will be replaced when you stage your first release.
+Initial release of `bsdev`
