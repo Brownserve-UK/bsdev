@@ -1,3 +1,5 @@
+use std::io::{IsTerminal, Write};
+
 use anyhow::{Context, Result};
 use clap::Parser;
 
@@ -23,6 +25,7 @@ fn main() -> Result<()> {
         Some(Command::Down) => down(&settings, verbose),
         Some(Command::Status) => status(&settings),
         Some(Command::Rebuild) => rebuild(&settings, verbose),
+        Some(Command::Reset { yes }) => reset(&settings, verbose, yes),
     }
 }
 
@@ -117,4 +120,67 @@ fn status(settings: &Settings) -> Result<()> {
     println!("volume:    {} ({})", settings.volume, volume);
     println!("key:       {}", settings.key_path.display());
     Ok(())
+}
+
+/// Delete the container and its home volume for a clean slate. Prompts for
+/// confirmation (the volume holds all repos/provisioning) unless `yes` is set.
+/// The host keypair is left in place - it is re-authorized on the next `up`.
+fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
+    docker::ensure_available().context("Docker is required to run bsdev")?;
+
+    let container_exists = docker::state(&settings.container)
+        .context("Failed to inspect the bsdev container")?
+        != ContainerState::Missing;
+    let volume_exists =
+        docker::volume_present(&settings.volume).context("Failed to inspect the bsdev volume")?;
+
+    if !container_exists && !volume_exists {
+        println!("Nothing to reset - no bsdev container or volume exist.");
+        return Ok(());
+    }
+
+    if !yes {
+        eprintln!("This permanently deletes:");
+        if container_exists {
+            eprintln!("  - the '{}' container", settings.container);
+        }
+        if volume_exists {
+            eprintln!(
+                "  - the '{}' volume (ALL repos, provisioning and data in the container's home)",
+                settings.volume
+            );
+        }
+        if !confirm("Continue?")? {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    // Remove the container first - the volume can't be removed while it's in use.
+    if container_exists {
+        println!("Removing the '{}' container ...", settings.container);
+        docker::remove(&settings.container, verbose).context("Failed to remove the container")?;
+    }
+    if volume_exists {
+        println!("Removing the '{}' volume ...", settings.volume);
+        docker::remove_volume(&settings.volume, verbose).context("Failed to remove the volume")?;
+    }
+    println!("Reset complete. Run `bsdev` to start fresh.");
+    Ok(())
+}
+
+/// Prompt for a y/N confirmation. Refuses (errors) when stdin is not a terminal
+/// so a piped/non-interactive invocation can't silently wipe data - use `--yes`.
+fn confirm(prompt: &str) -> Result<bool> {
+    if !std::io::stdin().is_terminal() {
+        anyhow::bail!("Refusing to reset without confirmation; re-run with --yes to reset non-interactively.");
+    }
+    eprint!("{prompt} [y/N] ");
+    std::io::stderr().flush().ok();
+    let mut input = String::new();
+    std::io::stdin()
+        .read_line(&mut input)
+        .context("Failed to read confirmation")?;
+    let answer = input.trim().to_ascii_lowercase();
+    Ok(answer == "y" || answer == "yes")
 }

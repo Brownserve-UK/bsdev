@@ -25,4 +25,10 @@ pub enum Command {
     Status,
     /// Pull the latest image and recreate the container (keeps the home volume).
     Rebuild,
+    /// Delete the container and its home volume for a clean slate (destructive).
+    Reset {
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
 }
