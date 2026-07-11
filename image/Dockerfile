@@ -75,5 +75,11 @@ RUN chmod 0755 /usr/local/bin/bsdev-entrypoint.sh /usr/local/bin/code
 COPY fish-cargo-path.fish /etc/fish/conf.d/bsdev-cargo-path.fish
 RUN chmod 0644 /etc/fish/conf.d/bsdev-cargo-path.fish
 
+# Tell VSCode Dev Containers to attach as `bsdev`. The container's default user is
+# root (so sshd can run as PID 1), but "Attach to Running Container" would then run
+# as root and read /root/.gitconfig instead of bsdev's chezmoi config. This label
+# makes VSCode attach as bsdev, matching the `bsdev` ssh session.
+LABEL devcontainer.metadata='[{"remoteUser":"bsdev"}]'
+
 EXPOSE 22
 ENTRYPOINT ["/usr/local/bin/bsdev-entrypoint.sh"]
