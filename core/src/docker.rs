@@ -85,6 +85,10 @@ pub fn remove(container: &str, verbose: bool) -> Result<()> {
     process::run(DOCKER, ["rm", "-f", container], verbose)
 }
 
+pub fn remove_volume(volume: &str, verbose: bool) -> Result<()> {
+    process::run(DOCKER, ["volume", "rm", volume], verbose)
+}
+
 /// Ensure `pubkey` is present in the container user's authorized_keys. Idempotent
 /// and run on every `up`, so a rotated/relocated host key or a persisted home
 /// volume created with a previous key still authorises without a recreate. The
