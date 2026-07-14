@@ -22,9 +22,6 @@ pub enum BsdevError {
 
     #[error("could not determine your home directory")]
     NoHome,
-
-    #[error("home dir `{0}` has files but no seed marker; move it aside or run `bsdev reset`")]
-    HomeSeedConflict(std::path::PathBuf),
 }
 
 pub type Result<T> = std::result::Result<T, BsdevError>;

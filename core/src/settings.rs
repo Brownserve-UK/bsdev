@@ -13,10 +13,14 @@ pub struct Settings {
     pub image: String,
     /// Container (and hostname) name.
     pub container: String,
-    /// Host directory bind-mounted at the container's home directory.
-    /// User-owned (under the per-user state dir) so its data is reachable
-    /// without root, unlike a `/var/lib/docker` named volume.
-    pub home_dir: PathBuf,
+    /// Named volume mounted at the container's home directory.
+    pub volume: String,
+    /// Optional host directory bind-mounted at `~/host-repos`, so code
+    /// changes made in the container are reachable from the host (e.g. for
+    /// running integration tests in host VMs). Only mounted when set - there
+    /// is no default, since a plain host bind mount can't hold Unix symlinks
+    /// on Windows (a repo with symlinks needs a WSL2/ext4 path instead).
+    pub repos_dir: Option<PathBuf>,
     /// Host port forwarded to the container's sshd (published on 127.0.0.1).
     pub port: u16,
     /// Login user inside the container.
@@ -38,9 +42,8 @@ impl Settings {
         Ok(Self {
             image: env_or("BSDEV_IMAGE", "ghcr.io/brownserve-uk/bsdev:latest"),
             container: env_or("BSDEV_CONTAINER", "bsdev"),
-            home_dir: std::env::var("BSDEV_HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| state.join("home")),
+            volume: "bsdev-home".to_string(),
+            repos_dir: std::env::var("BSDEV_REPOS").ok().map(PathBuf::from),
             port: env_or("BSDEV_PORT", "2222").parse().unwrap_or(2222),
             user: env_or("BSDEV_USER", "bsdev"),
             key_path: state.join("id_ed25519"),
@@ -57,9 +60,17 @@ impl Settings {
         format!("/home/{}", self.user)
     }
 
-    /// The `-v` "source:target" spec for the home bind mount.
+    /// The `-v` "source:target" spec for the home volume mount.
     pub fn home_mount(&self) -> String {
-        format!("{}:{}", self.home_dir.display(), self.container_home())
+        format!("{}:{}", self.volume, self.container_home())
+    }
+
+    /// The `-v` "source:target" spec for the optional repos bind mount, if
+    /// `BSDEV_REPOS` is set.
+    pub fn repos_mount(&self) -> Option<String> {
+        self.repos_dir
+            .as_ref()
+            .map(|d| format!("{}:{}/host-repos", d.display(), self.container_home()))
     }
 
     /// Path to the public half of `key_path` (`<key_path>.pub`).

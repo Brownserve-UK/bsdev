@@ -12,7 +12,10 @@ host's VSCode.
   shared version (the Brownserve release tooling bumps it; keep `Cargo.lock` committed).
 - `core/` (crate `bsdev-core`) - all orchestration logic, unit-tested, `thiserror` errors:
   - `settings.rs` - `Settings`: constants with `BSDEV_*` env overrides (`BSDEV_IMAGE`,
-    `BSDEV_CONTAINER`, `BSDEV_VOLUME`, `BSDEV_PORT`, `BSDEV_USER`). The ssh key lives in a bsdev
+    `BSDEV_CONTAINER`, `BSDEV_PORT`, `BSDEV_USER`). The home directory is always the fixed
+    `bsdev-home` named volume (not overridable). `BSDEV_REPOS` optionally bind-mounts
+    a host directory at `~/host-repos` (unset by default) so code changes are reachable from the
+    host, e.g. for running integration tests in host VMs. The ssh key lives in a bsdev
     state dir via the `directories` crate (NOT `~/.ssh`).
   - `docker.rs` - pure arg-builders (`run_args`, tested) + wrappers (`state`, `pull_image`,
     `run_container`, `ensure_authorized_key`, `remove`, `remove_volume`, ...).

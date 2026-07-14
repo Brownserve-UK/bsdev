@@ -52,15 +52,26 @@ Usage: bsdev [OPTIONS] [COMMAND]
 
 Commands:
   up       Ensure the image and container are up, without connecting
-  down     Stop the container (its home directory is preserved)
-  status   Show image, container and home directory state
-  rebuild  Pull the latest image and recreate the container (keeps the home directory)
+  down     Stop the container (its home volume is preserved)
+  status   Show image, container and home volume state
+  rebuild  Pull the latest image and recreate the container (keeps the home volume)
 
 Options:
   -v, --verbose  Print each docker/ssh command as it runs
   -h, --help     Print help
   -V, --version  Print version
 ```
+
+The container's home directory is backed by a Docker named volume (`bsdev-home`),
+so it's populated automatically from the image and keeps full Linux file
+semantics (permissions, symlinks).
+
+If you want code changes made inside the container reachable from the host
+(e.g. to run integration tests in host VMs), set `BSDEV_REPOS` to a host
+directory; it's bind-mounted at `~/host-repos` in the container. This is
+optional and off by default - a plain host directory can't hold Unix symlinks
+on Windows, so a repo relying on those should live in a WSL2/Linux-backed
+path instead.
 
 ## Building
 
