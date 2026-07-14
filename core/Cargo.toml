@@ -6,3 +6,4 @@ edition.workspace = true
 [dependencies]
 thiserror = "2"
 directories = "6"
+hostname = "0.4"
