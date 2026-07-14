@@ -25,4 +25,10 @@ fi
 # Defensive: regenerate host keys if a volume mount ever hid /etc/ssh contents.
 ssh-keygen -A >/dev/null 2>&1 || true
 
+# ensure the host's hostname is available to the container, if it was passed in by the `bsdev` launcher
+if [ -n "${BSDEV_HOST_HOSTNAME:-}" ]; then
+    printf '%s\n' "$BSDEV_HOST_HOSTNAME" > /etc/bsdev-host-hostname
+    chmod 0644 /etc/bsdev-host-hostname
+fi
+
 exec /usr/bin/sshd -D -e
