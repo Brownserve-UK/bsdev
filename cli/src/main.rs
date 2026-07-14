@@ -1,4 +1,6 @@
+use std::fs;
 use std::io::{IsTerminal, Write};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -26,6 +28,7 @@ fn main() -> Result<()> {
         Some(Command::Status) => status(&settings),
         Some(Command::Rebuild) => rebuild(&settings, verbose),
         Some(Command::Reset { yes }) => reset(&settings, verbose, yes),
+        Some(Command::Repos { path, unset }) => repos(path, unset),
     }
 }
 
@@ -48,7 +51,7 @@ fn ensure_up(settings: &Settings, verbose: bool) -> Result<()> {
             docker::start(&settings.container, verbose).context("Failed to start the container")?;
         }
         ContainerState::Missing => {
-            docker::seed_home(settings, verbose).context("Failed to seed the bsdev home directory")?;
+            ensure_repos_dir(settings)?;
             println!("Creating the bsdev container ...");
             docker::run_container(settings, &pubkey, verbose).context("Failed to create the container")?;
         }
@@ -59,6 +62,16 @@ fn ensure_up(settings: &Settings, verbose: bool) -> Result<()> {
     // never need a recreate to reconnect.
     docker::ensure_authorized_key(settings, &pubkey, verbose)
         .context("Failed to authorize the bsdev key in the container")?;
+    Ok(())
+}
+
+/// Create the `BSDEV_REPOS` host directory (if configured) before the
+/// container is created, so Docker doesn't create it root-owned and the bind
+/// mount has somewhere to land on a fresh volume.
+fn ensure_repos_dir(settings: &Settings) -> Result<()> {
+    if let Some(dir) = &settings.repos_dir {
+        fs::create_dir_all(dir).context("Failed to create the bsdev repos directory")?;
+    }
     Ok(())
 }
 
@@ -89,15 +102,15 @@ fn rebuild(settings: &Settings, verbose: bool) -> Result<()> {
 
     if docker::state(&settings.container)? != ContainerState::Missing {
         println!(
-            "Removing the old container (the home directory at {} is kept) ...",
-            settings.home_dir.display()
+            "Removing the old container (the '{}' home volume is kept) ...",
+            settings.volume
         );
         docker::remove(&settings.container, verbose).context("Failed to remove the container")?;
     }
 
     ssh::ensure_keypair(settings, verbose).context("Failed to create the bsdev ssh key")?;
     let key = ssh::read_pubkey(settings).context("Failed to read the bsdev public key")?;
-    docker::seed_home(settings, verbose).context("Failed to seed the bsdev home directory")?;
+    ensure_repos_dir(settings)?;
     println!("Creating the bsdev container ...");
     docker::run_container(settings, &key, verbose).context("Failed to create the container")?;
     println!("bsdev rebuilt. Run `bsdev` to connect.");
@@ -121,15 +134,20 @@ fn status(settings: &Settings) -> Result<()> {
     };
     println!("container: {} ({})", settings.container, state);
 
-    let home = if docker::home_present(&settings.home_dir)? { "present" } else { "missing" };
-    println!("home:      {} ({})", settings.home_dir.display(), home);
+    let home = if docker::volume_present(&settings.volume)? { "present" } else { "missing" };
+    println!("home:      {} ({})", settings.volume, home);
+    if let Some(repos_dir) = &settings.repos_dir {
+        println!("repos:     {}", repos_dir.display());
+    }
     println!("key:       {}", settings.key_path.display());
     Ok(())
 }
 
-/// Delete the container and its home directory for a clean slate. Prompts for
-/// confirmation (the home dir holds all repos/provisioning) unless `yes` is set.
-/// The host keypair is left in place - it is re-authorized on the next `up`.
+/// Delete the container and its home volume for a clean slate. Prompts for
+/// confirmation (the home volume holds all repos/provisioning) unless `yes`
+/// is set. The host keypair is left in place - it is re-authorized on the
+/// next `up`. Any `BSDEV_REPOS` host directory is left untouched - it's the
+/// user's own files on the host, not bsdev-managed state.
 fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
     docker::ensure_available().context("Docker is required to run bsdev")?;
 
@@ -137,10 +155,10 @@ fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
         .context("Failed to inspect the bsdev container")?
         != ContainerState::Missing;
     let home_exists =
-        docker::home_present(&settings.home_dir).context("Failed to inspect the bsdev home directory")?;
+        docker::volume_present(&settings.volume).context("Failed to inspect the bsdev home volume")?;
 
     if !container_exists && !home_exists {
-        println!("Nothing to reset - no bsdev container or home directory exist.");
+        println!("Nothing to reset - no bsdev container or home volume exist.");
         return Ok(());
     }
 
@@ -151,9 +169,12 @@ fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
         }
         if home_exists {
             eprintln!(
-                "  - the home directory at {} (ALL repos, provisioning and data)",
-                settings.home_dir.display()
+                "  - the '{}' home volume (ALL repos, provisioning and data)",
+                settings.volume
             );
+        }
+        if let Some(repos_dir) = &settings.repos_dir {
+            eprintln!("  (the repos directory at {} is left untouched)", repos_dir.display());
         }
         if !confirm("Continue?")? {
             println!("Aborted.");
@@ -161,17 +182,39 @@ fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
         }
     }
 
-    // Remove the container first - it's using the home directory bind mount.
+    // Remove the container first - it's using the home volume.
     if container_exists {
         println!("Removing the '{}' container ...", settings.container);
         docker::remove(&settings.container, verbose).context("Failed to remove the container")?;
     }
     if home_exists {
-        println!("Removing the home directory at {} ...", settings.home_dir.display());
-        docker::remove_home(&settings.home_dir, &settings.image, verbose)
-            .context("Failed to remove the home directory")?;
+        println!("Removing the '{}' home volume ...", settings.volume);
+        docker::remove_volume(&settings.volume, verbose).context("Failed to remove the home volume")?;
     }
     println!("Reset complete. Run `bsdev` to start fresh.");
+    Ok(())
+}
+
+/// Get or persist the `BSDEV_REPOS` host directory (see `Settings::persist_repos_dir`).
+fn repos(path: Option<PathBuf>, unset: bool) -> Result<()> {
+    if unset {
+        Settings::clear_persisted_repos_dir().context("Failed to clear the persisted repos directory")?;
+        println!("Cleared the persisted repos directory.");
+        return Ok(());
+    }
+
+    if let Some(dir) = path {
+        Settings::persist_repos_dir(&dir).context("Failed to persist the repos directory")?;
+        println!("Persisted repos directory: {}", dir.display());
+        return Ok(());
+    }
+
+    match Settings::persisted_repos_dir().context("Failed to read the persisted repos directory")? {
+        Some(dir) => println!("{}", dir.display()),
+        None => println!(
+            "No repos directory persisted. Run `bsdev repos <path>` to set one, or set BSDEV_REPOS to override for a single run."
+        ),
+    }
     Ok(())
 }
 

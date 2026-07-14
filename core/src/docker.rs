@@ -1,15 +1,8 @@
-use std::fs;
-use std::path::Path;
-
 use crate::error::{BsdevError, Result};
 use crate::process;
 use crate::settings::Settings;
 
 const DOCKER: &str = "docker";
-
-/// Marker written into the host home dir once seeding completes, so an
-/// interrupted seed (partial copy) is not mistaken for a valid home.
-const SEED_MARKER: &str = ".bsdev-seeded";
 
 /// Whether the named container exists and, if so, whether it is running.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,97 +42,16 @@ pub fn state(container: &str) -> Result<ContainerState> {
     }
 }
 
-/// Whether the host home dir exists and is non-empty (status/reset checks).
-pub fn home_present(dir: &Path) -> Result<bool> {
-    Ok(dir.exists() && fs::read_dir(dir)?.next().is_some())
-}
-
-/// Pure decision logic for whether a host home dir needs seeding, factored out
-/// of `home_needs_seed` so it can be unit-tested without touching the filesystem.
-fn needs_seed(exists: bool, empty: bool, marker_present: bool) -> bool {
-    !exists || empty || !marker_present
-}
-
-/// True when the host home dir must be seeded: it does not exist, or it is
-/// empty, or it exists but the completion marker is absent (partial seed).
-pub fn home_needs_seed(dir: &Path) -> Result<bool> {
-    if !dir.exists() {
-        return Ok(needs_seed(false, true, false));
-    }
-    let empty = fs::read_dir(dir)?.next().is_none();
-    let marker_present = dir.join(SEED_MARKER).exists();
-    Ok(needs_seed(true, empty, marker_present))
-}
-
-/// Populate the host home dir from the image's `/home/<user>` the first time,
-/// before any `docker run`, so the empty bind mount does not shadow the
-/// image-baked tooling (rustup/cargo/claude/yay). Idempotent.
-///
-/// A named volume copies image content automatically; a bind mount does not,
-/// so we do it explicitly with a throwaway (created, never started) container
-/// + `docker cp`.
-pub fn seed_home(settings: &Settings, verbose: bool) -> Result<()> {
-    if !home_needs_seed(&settings.home_dir)? {
-        return Ok(());
-    }
-
-    // A non-empty dir with no marker is a partial seed or someone else's data -
-    // refuse to clobber it silently.
-    if settings.home_dir.exists()
-        && fs::read_dir(&settings.home_dir)?.next().is_some()
-        && !settings.home_dir.join(SEED_MARKER).exists()
-    {
-        return Err(BsdevError::HomeSeedConflict(settings.home_dir.clone()));
-    }
-
-    // Create the dir from Rust (as the host user) BEFORE any docker run, so
-    // Docker never creates it root-owned.
-    fs::create_dir_all(&settings.home_dir)?;
-
-    let seed = format!("{}-seed", settings.container);
-    let _ = process::run(DOCKER, ["rm", "-f", seed.as_str()], verbose); // clear any stale seed
-    process::run(DOCKER, ["create", "--name", seed.as_str(), settings.image.as_str()], verbose)?;
-
-    let src = format!("{}:{}/.", seed, settings.container_home()); // trailing /. copies contents
-    let dst = settings.home_dir.to_string_lossy().into_owned();
-    let copied = process::run(DOCKER, ["cp", "-a", src.as_str(), dst.as_str()], verbose);
-    let _ = process::run(DOCKER, ["rm", "-f", seed.as_str()], verbose); // always clean up
-
-    copied?;
-    fs::write(settings.home_dir.join(SEED_MARKER), b"")?;
-    Ok(())
-}
-
-/// Delete the host home dir (reset). Tries a plain recursive remove first
-/// (works when the files are owned by the host user, i.e. uid 1000 == 1000).
-/// If that hits a permission error (container wrote files as a uid the host
-/// user can't unlink), fall back to removing it from inside a container that
-/// mounts the parent dir, so it deletes the whole `home` subtree as root.
-pub fn remove_home(dir: &Path, image: &str, verbose: bool) -> Result<()> {
-    match fs::remove_dir_all(dir) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
-            let parent = dir.parent().ok_or(BsdevError::NoHome)?;
-            let name = dir.file_name().and_then(|s| s.to_str()).ok_or(BsdevError::NoHome)?;
-            let mount = format!("{}:/p", parent.display());
-            let target = format!("/p/{name}");
-            process::run(
-                DOCKER,
-                ["run", "--rm", "-v", mount.as_str(), image, "rm", "-rf", target.as_str()],
-                verbose,
-            )?;
-            Ok(())
-        }
-        Err(e) => Err(e.into()),
-    }
+/// Whether the named volume exists (status/reset checks).
+pub fn volume_present(volume: &str) -> Result<bool> {
+    Ok(process::capture(DOCKER, &["volume", "inspect", volume])?.is_some())
 }
 
 /// Build the `docker run` argument vector. Pure so it can be unit-tested without
 /// a Docker daemon. The public key is injected via an env var (read in Rust, not
 /// via a shell `cat`) so this stays cross-platform.
 pub fn run_args(settings: &Settings, authorized_key: &str) -> Vec<String> {
-    vec![
+    let mut args = vec![
         "run".to_string(),
         "-d".to_string(),
         "--name".to_string(),
@@ -152,12 +64,17 @@ pub fn run_args(settings: &Settings, authorized_key: &str) -> Vec<String> {
         format!("127.0.0.1:{}:22", settings.port),
         "-v".to_string(),
         settings.home_mount(),
-        "-e".to_string(),
-        format!("BSDEV_AUTHORIZED_KEY={authorized_key}"),
-        "-e".to_string(),
-        format!("BSDEV_HOST_HOSTNAME={}", settings.host_hostname),
-        settings.image.clone(),
-    ]
+    ];
+    if let Some(repos_mount) = settings.repos_mount() {
+        args.push("-v".to_string());
+        args.push(repos_mount);
+    }
+    args.push("-e".to_string());
+    args.push(format!("BSDEV_AUTHORIZED_KEY={authorized_key}"));
+    args.push("-e".to_string());
+    args.push(format!("BSDEV_HOST_HOSTNAME={}", settings.host_hostname));
+    args.push(settings.image.clone());
+    args
 }
 
 pub fn run_container(settings: &Settings, authorized_key: &str, verbose: bool) -> Result<()> {
@@ -213,7 +130,8 @@ mod tests {
         Settings {
             image: "ghcr.io/brownserve-uk/bsdev:latest".to_string(),
             container: "bsdev".to_string(),
-            home_dir: PathBuf::from("/state/bsdev/home"),
+            volume: "bsdev-home".to_string(),
+            repos_dir: None,
             port: 2222,
             user: "bsdev".to_string(),
             key_path: PathBuf::from("/state/bsdev/id_ed25519"),
@@ -234,7 +152,7 @@ mod tests {
         assert!(has_pair(&args, "--hostname", "bsdev"));
         assert!(has_pair(&args, "--restart", "unless-stopped"));
         assert!(has_pair(&args, "-p", "127.0.0.1:2222:22"));
-        assert!(has_pair(&args, "-v", "/state/bsdev/home:/home/bsdev"));
+        assert!(has_pair(&args, "-v", "bsdev-home:/home/bsdev"));
         assert!(has_pair(&args, "-e", "BSDEV_AUTHORIZED_KEY=ssh-ed25519 AAAA test"));
         assert!(has_pair(&args, "-e", "BSDEV_HOST_HOSTNAME=my-laptop"));
         // The image is always the final positional argument.
@@ -250,23 +168,16 @@ mod tests {
     }
 
     #[test]
-    fn needs_seed_when_dir_missing() {
-        assert!(needs_seed(false, true, false));
+    fn run_args_omits_repos_mount_when_unset() {
+        let args = run_args(&settings(), "k");
+        assert!(!args.iter().any(|a| a.contains("/host-repos")));
     }
 
     #[test]
-    fn needs_seed_when_dir_empty() {
-        assert!(needs_seed(true, true, false));
-    }
-
-    #[test]
-    fn needs_seed_when_marker_absent() {
-        // Non-empty but no completion marker: a partial/interrupted seed.
-        assert!(needs_seed(true, false, false));
-    }
-
-    #[test]
-    fn does_not_need_seed_when_marker_present() {
-        assert!(!needs_seed(true, false, true));
+    fn run_args_includes_repos_mount_when_set() {
+        let mut s = settings();
+        s.repos_dir = Some(PathBuf::from("/host/repos"));
+        let args = run_args(&s, "k");
+        assert!(has_pair(&args, "-v", "/host/repos:/home/bsdev/host-repos"));
     }
 }

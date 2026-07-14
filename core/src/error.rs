@@ -23,8 +23,8 @@ pub enum BsdevError {
     #[error("could not determine your home directory")]
     NoHome,
 
-    #[error("home dir `{0}` has files but no seed marker; move it aside or run `bsdev reset`")]
-    HomeSeedConflict(std::path::PathBuf),
+    #[error("could not parse config file `{path}`: {source}")]
+    Config { path: std::path::PathBuf, source: serde_json::Error },
 }
 
 pub type Result<T> = std::result::Result<T, BsdevError>;

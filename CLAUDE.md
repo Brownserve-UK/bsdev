@@ -12,8 +12,15 @@ host's VSCode.
   shared version (the Brownserve release tooling bumps it; keep `Cargo.lock` committed).
 - `core/` (crate `bsdev-core`) - all orchestration logic, unit-tested, `thiserror` errors:
   - `settings.rs` - `Settings`: constants with `BSDEV_*` env overrides (`BSDEV_IMAGE`,
-    `BSDEV_CONTAINER`, `BSDEV_VOLUME`, `BSDEV_PORT`, `BSDEV_USER`). The ssh key lives in a bsdev
-    state dir via the `directories` crate (NOT `~/.ssh`).
+    `BSDEV_CONTAINER`, `BSDEV_PORT`, `BSDEV_USER`). The home directory is always the fixed
+    `bsdev-home` named volume (not overridable). `repos_dir` optionally bind-mounts a host
+    directory at `~/host-repos` (unset by default) so code changes are reachable from the host,
+    e.g. for running integration tests in host VMs; resolved from `BSDEV_REPOS` if set, else from
+    `config.json` (see `config.rs`), persisted via `bsdev repos <path>` / `Settings::persist_repos_dir`.
+    The ssh key lives in a bsdev state dir via the `directories` crate (NOT `~/.ssh`).
+  - `config.rs` - `Config`: a `serde`-derived struct (JSON, `serde_json`) persisted at
+    `<state dir>/config.json`, holding user settings across runs (currently just `repos_dir`). Every
+    field is optional so the file can grow without breaking older configs.
   - `docker.rs` - pure arg-builders (`run_args`, tested) + wrappers (`state`, `pull_image`,
     `run_container`, `ensure_authorized_key`, `remove`, `remove_volume`, ...).
   - `ssh.rs` - `ensure_keypair`, `read_pubkey`, and `connect` with explicit args (no reliance on
@@ -24,7 +31,8 @@ host's VSCode.
   - `process.rs` - `Command` runner with inherited stdio (real TTY) + friendly not-found errors.
 - `cli/` (crate `bsdev`, `[[bin]] name = "bsdev"`) - thin clap shell, `anyhow`:
   - `cli.rs` - clap types; `main.rs` - dispatch + command handlers.
-  - Commands: `bsdev` (default: ensure up + connect), `up`, `down`, `status`, `rebuild`, `reset`.
+  - Commands: `bsdev` (default: ensure up + connect), `up`, `down`, `status`, `rebuild`, `reset`,
+    `repos` (get/persist/unset the `~/host-repos` bind-mount source directory).
 - `image/` - the container image (published to `ghcr.io/brownserve-uk/bsdev` by CI):
   - `Dockerfile` - Arch, `bsdev` user + passwordless sudo, sshd as PID 1, `/etc/bsdev-container`
     marker, ALL tooling baked in (gh, chezmoi, git, fish, Node, Rust via rustup, oh-my-posh, tenv,
