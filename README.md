@@ -50,9 +50,9 @@ Usage: bsdev [OPTIONS] [COMMAND]
 
 Commands:
   up       Ensure the image and container are up, without connecting
-  down     Stop the container (its home volume is preserved)
-  status   Show image, container and volume state
-  rebuild  Pull the latest image and recreate the container (keeps the home volume)
+  down     Stop the container (its home directory is preserved)
+  status   Show image, container and home directory state
+  rebuild  Pull the latest image and recreate the container (keeps the home directory)
 
 Options:
   -v, --verbose  Print each docker/ssh command as it runs

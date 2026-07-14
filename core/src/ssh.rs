@@ -96,7 +96,7 @@ mod tests {
         Settings {
             image: "img".to_string(),
             container: "bsdev".to_string(),
-            volume: "bsdev-home".to_string(),
+            home_dir: PathBuf::from("/state/bsdev/home"),
             port: 2222,
             user: "bsdev".to_string(),
             key_path: PathBuf::from("/state/bsdev/id_ed25519"),

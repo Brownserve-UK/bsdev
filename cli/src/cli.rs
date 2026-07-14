@@ -19,13 +19,13 @@ pub struct Cli {
 pub enum Command {
     /// Ensure the image and container are up, without connecting.
     Up,
-    /// Stop the container (its home volume is preserved).
+    /// Stop the container (its home directory is preserved).
     Down,
-    /// Show image, container and volume state.
+    /// Show image, container and home directory state.
     Status,
-    /// Pull the latest image and recreate the container (keeps the home volume).
+    /// Pull the latest image and recreate the container (keeps the home directory).
     Rebuild,
-    /// Delete the container and its home volume for a clean slate (destructive).
+    /// Delete the container and its home directory for a clean slate (destructive).
     Reset {
         /// Skip the confirmation prompt.
         #[arg(long, short = 'y')]

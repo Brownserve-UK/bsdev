@@ -13,8 +13,10 @@ pub struct Settings {
     pub image: String,
     /// Container (and hostname) name.
     pub container: String,
-    /// Named volume mounted at the container's home directory.
-    pub volume: String,
+    /// Host directory bind-mounted at the container's home directory.
+    /// User-owned (under the per-user state dir) so its data is reachable
+    /// without root, unlike a `/var/lib/docker` named volume.
+    pub home_dir: PathBuf,
     /// Host port forwarded to the container's sshd (published on 127.0.0.1).
     pub port: u16,
     /// Login user inside the container.
@@ -33,16 +35,23 @@ impl Settings {
         Ok(Self {
             image: env_or("BSDEV_IMAGE", "ghcr.io/brownserve-uk/bsdev:latest"),
             container: env_or("BSDEV_CONTAINER", "bsdev"),
-            volume: env_or("BSDEV_VOLUME", "bsdev-home"),
+            home_dir: std::env::var("BSDEV_HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| state.join("home")),
             port: env_or("BSDEV_PORT", "2222").parse().unwrap_or(2222),
             user: env_or("BSDEV_USER", "bsdev"),
             key_path: state.join("id_ed25519"),
         })
     }
 
-    /// The container's home directory (where the named volume is mounted).
+    /// The container's home directory (where the host bind mount is mounted).
     pub fn container_home(&self) -> String {
         format!("/home/{}", self.user)
+    }
+
+    /// The `-v` "source:target" spec for the home bind mount.
+    pub fn home_mount(&self) -> String {
+        format!("{}:{}", self.home_dir.display(), self.container_home())
     }
 
     /// Path to the public half of `key_path` (`<key_path>.pub`).

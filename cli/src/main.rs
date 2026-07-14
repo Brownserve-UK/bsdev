@@ -48,6 +48,7 @@ fn ensure_up(settings: &Settings, verbose: bool) -> Result<()> {
             docker::start(&settings.container, verbose).context("Failed to start the container")?;
         }
         ContainerState::Missing => {
+            docker::seed_home(settings, verbose).context("Failed to seed the bsdev home directory")?;
             println!("Creating the bsdev container ...");
             docker::run_container(settings, &pubkey, verbose).context("Failed to create the container")?;
         }
@@ -87,12 +88,16 @@ fn rebuild(settings: &Settings, verbose: bool) -> Result<()> {
     docker::pull_image(&settings.image, verbose)?;
 
     if docker::state(&settings.container)? != ContainerState::Missing {
-        println!("Removing the old container (the {} volume is kept) ...", settings.volume);
+        println!(
+            "Removing the old container (the home directory at {} is kept) ...",
+            settings.home_dir.display()
+        );
         docker::remove(&settings.container, verbose).context("Failed to remove the container")?;
     }
 
     ssh::ensure_keypair(settings, verbose).context("Failed to create the bsdev ssh key")?;
     let key = ssh::read_pubkey(settings).context("Failed to read the bsdev public key")?;
+    docker::seed_home(settings, verbose).context("Failed to seed the bsdev home directory")?;
     println!("Creating the bsdev container ...");
     docker::run_container(settings, &key, verbose).context("Failed to create the container")?;
     println!("bsdev rebuilt. Run `bsdev` to connect.");
@@ -116,14 +121,14 @@ fn status(settings: &Settings) -> Result<()> {
     };
     println!("container: {} ({})", settings.container, state);
 
-    let volume = if docker::volume_present(&settings.volume)? { "present" } else { "missing" };
-    println!("volume:    {} ({})", settings.volume, volume);
+    let home = if docker::home_present(&settings.home_dir)? { "present" } else { "missing" };
+    println!("home:      {} ({})", settings.home_dir.display(), home);
     println!("key:       {}", settings.key_path.display());
     Ok(())
 }
 
-/// Delete the container and its home volume for a clean slate. Prompts for
-/// confirmation (the volume holds all repos/provisioning) unless `yes` is set.
+/// Delete the container and its home directory for a clean slate. Prompts for
+/// confirmation (the home dir holds all repos/provisioning) unless `yes` is set.
 /// The host keypair is left in place - it is re-authorized on the next `up`.
 fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
     docker::ensure_available().context("Docker is required to run bsdev")?;
@@ -131,11 +136,11 @@ fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
     let container_exists = docker::state(&settings.container)
         .context("Failed to inspect the bsdev container")?
         != ContainerState::Missing;
-    let volume_exists =
-        docker::volume_present(&settings.volume).context("Failed to inspect the bsdev volume")?;
+    let home_exists =
+        docker::home_present(&settings.home_dir).context("Failed to inspect the bsdev home directory")?;
 
-    if !container_exists && !volume_exists {
-        println!("Nothing to reset - no bsdev container or volume exist.");
+    if !container_exists && !home_exists {
+        println!("Nothing to reset - no bsdev container or home directory exist.");
         return Ok(());
     }
 
@@ -144,10 +149,10 @@ fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
         if container_exists {
             eprintln!("  - the '{}' container", settings.container);
         }
-        if volume_exists {
+        if home_exists {
             eprintln!(
-                "  - the '{}' volume (ALL repos, provisioning and data in the container's home)",
-                settings.volume
+                "  - the home directory at {} (ALL repos, provisioning and data)",
+                settings.home_dir.display()
             );
         }
         if !confirm("Continue?")? {
@@ -156,14 +161,15 @@ fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
         }
     }
 
-    // Remove the container first - the volume can't be removed while it's in use.
+    // Remove the container first - it's using the home directory bind mount.
     if container_exists {
         println!("Removing the '{}' container ...", settings.container);
         docker::remove(&settings.container, verbose).context("Failed to remove the container")?;
     }
-    if volume_exists {
-        println!("Removing the '{}' volume ...", settings.volume);
-        docker::remove_volume(&settings.volume, verbose).context("Failed to remove the volume")?;
+    if home_exists {
+        println!("Removing the home directory at {} ...", settings.home_dir.display());
+        docker::remove_home(&settings.home_dir, &settings.image, verbose)
+            .context("Failed to remove the home directory")?;
     }
     println!("Reset complete. Run `bsdev` to start fresh.");
     Ok(())
