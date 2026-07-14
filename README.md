@@ -8,16 +8,18 @@ container, from any shell on any OS.
 
 The container comes with:
 
-- git,
-- GitHub CLI (`gh`),
+- git
+- GitHub CLI
 - chezmoi
-- fish,
-- oh-my-posh,
+- fish
+- oh-my-posh
 - topgrade
 - Node.js / npm
 - Rust (via rustup)
 - tenv
 - Claude Code
+- JDK
+- Android SDK
 
 ## Install
 

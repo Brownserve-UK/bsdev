@@ -1,26 +1,30 @@
 # syntax=docker/dockerfile:1
 #
-# bsdev: a batteries-included Arch dev container. It runs sshd as PID 1 so it
+# bsdev: a fully featured Arch dev container. It runs sshd as PID 1 so it
 # stays up permanently. ALL tooling lives here (gh, chezmoi, git, fish, Claude
-# Code, ...); user-specific provisioning/config is done afterward by chezmoi
-# (bootstrap-bsdev.sh in the portable_config repo), not by this image.
-#
-# The root prep mirrors bootstrap/provision-wsl-root.sh from portable_config.
-# Published to ghcr.io/brownserve-uk/bsdev by this repo's CI.
+# Code, etc etc); user-specific provisioning/config can be done afterward by chezmoi
+# if desired.
 #
 FROM archlinux:latest
 
 ARG BSDEV_USER=bsdev
 ENV BSDEV_USER=${BSDEV_USER}
 
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+ENV ANDROID_HOME=${ANDROID_SDK_ROOT}
+ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk
+ENV PATH=${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${PATH}
+
 # Refresh the keyring first (a pulled base image can carry a stale
 # archlinux-keyring, which makes later package signatures fail), then install
-# the full toolset. openssh -> sshd; sudo is not guaranteed by base-devel.
+# the full toolset. openssh -> sshd; sudo is not guaranteed by base-devel;
+# jdk21-openjdk -> Gradle/AGP and sdkmanager both need a JDK.
 RUN pacman -Sy --needed --noconfirm archlinux-keyring \
     && pacman -Su --needed --noconfirm \
         base-devel git openssh sudo nano curl \
         github-cli fish fastfetch wget chezmoi \
         rustup nodejs npm \
+        jdk21-openjdk \
     && pacman -Scc --noconfirm
 
 # Create the login user in wheel with validated passwordless sudo (a typo can't
@@ -34,7 +38,8 @@ RUN useradd -m -G wheel,users -s /usr/bin/fish "${BSDEV_USER}" \
 RUN touch /etc/bsdev-container
 
 # AUR tooling + Claude Code, installed as the login user (makepkg refuses to run
-# as root; the native Claude installer drops a self-updating binary in ~/.local/bin).
+# as root; the native Claude installer drops a self-updating binary in ~/.local/bin)
+# Which topgrade can handle upgrading.
 # Fetches from aur.archlinux.org are occasionally flaky in CI (transient TLS
 # EOFs), so retry the network-bound steps; --needed keeps retries idempotent.
 USER ${BSDEV_USER}
@@ -45,6 +50,7 @@ RUN export HOME="/home/${BSDEV_USER}"; \
     && ( cd "$tmp" && makepkg -si --noconfirm ) \
     && rm -rf "$tmp" \
     && retry yay -S --needed --noconfirm oh-my-posh-bin tenv-bin topgrade-bin \
+        android-sdk-cmdline-tools-latest android-sdk-platform-tools android-sdk-build-tools \
     && retry sh -c "curl -fsSL https://claude.ai/install.sh | bash"
 
 # rustup itself comes from the official repos above; install+select the stable
@@ -64,6 +70,12 @@ RUN ssh-keygen -A \
         -e 's/^#\?PermitRootLogin.*/PermitRootLogin no/' \
         /etc/ssh/sshd_config
 
+# Accept the Android SDK licenses (AGP/Gradle check for these before building)
+# and hand ownership to ${BSDEV_USER} so they can add further SDK components
+# later (sdkmanager --install ...) without needing sudo.
+RUN yes | ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null \
+    && chown -R ${BSDEV_USER}:${BSDEV_USER} ${ANDROID_SDK_ROOT}
+
 COPY bsdev-entrypoint.sh /usr/local/bin/bsdev-entrypoint.sh
 # In-container `code` shim: opens paths in the host VSCode over the bsdev reverse
 # channel (see image/code). VSCode's own remote-cli takes PATH precedence inside
@@ -74,6 +86,11 @@ RUN chmod 0755 /usr/local/bin/bsdev-entrypoint.sh /usr/local/bin/code
 # Put rustup's cargo/rustc shims on PATH for fish (the container's login shell).
 COPY fish-cargo-path.fish /etc/fish/conf.d/bsdev-cargo-path.fish
 RUN chmod 0644 /etc/fish/conf.d/bsdev-cargo-path.fish
+
+# sshd doesn't propagate the image's ENV into login shells, so the Android SDK
+# env + PATH need setting again here (same reason as the cargo snippet above).
+COPY fish-android-path.fish /etc/fish/conf.d/bsdev-android-path.fish
+RUN chmod 0644 /etc/fish/conf.d/bsdev-android-path.fish
 
 # Tell VSCode Dev Containers to attach as `bsdev`. The container's default user is
 # root (so sshd can run as PID 1), but "Attach to Running Container" would then run
