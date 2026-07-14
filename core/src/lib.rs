@@ -6,6 +6,7 @@
 //! is the image's and chezmoi's job respectively.
 
 pub mod codebridge;
+pub mod config;
 pub mod docker;
 pub mod error;
 pub mod process;

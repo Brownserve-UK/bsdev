@@ -1,7 +1,8 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use directories::ProjectDirs;
 
+use crate::config::Config;
 use crate::error::{BsdevError, Result};
 
 /// Runtime configuration. Sensible constants, each overridable via a `BSDEV_*`
@@ -20,6 +21,8 @@ pub struct Settings {
     /// running integration tests in host VMs). Only mounted when set - there
     /// is no default, since a plain host bind mount can't hold Unix symlinks
     /// on Windows (a repo with symlinks needs a WSL2/ext4 path instead).
+    /// Resolved from `BSDEV_REPOS` if set, else from the persisted config
+    /// written by `bsdev repos <path>` (see `Settings::persisted_repos_dir`).
     pub repos_dir: Option<PathBuf>,
     /// Host port forwarded to the container's sshd (published on 127.0.0.1).
     pub port: u16,
@@ -34,16 +37,15 @@ pub struct Settings {
 }
 
 impl Settings {
-    /// Build settings from constants + `BSDEV_*` overrides.
+    /// Build settings from constants + `BSDEV_*` overrides + the persisted config.
     pub fn load() -> Result<Self> {
-        let dirs = ProjectDirs::from("", "", "bsdev").ok_or(BsdevError::NoHome)?;
-        // Machine-local state dir (e.g. ~/.local/share/bsdev, %LOCALAPPDATA%\bsdev\data).
-        let state = dirs.data_local_dir().to_path_buf();
+        let state = state_dir()?;
+        let config = Config::load(&state)?;
         Ok(Self {
             image: env_or("BSDEV_IMAGE", "ghcr.io/brownserve-uk/bsdev:latest"),
             container: env_or("BSDEV_CONTAINER", "bsdev"),
             volume: "bsdev-home".to_string(),
-            repos_dir: std::env::var("BSDEV_REPOS").ok().map(PathBuf::from),
+            repos_dir: std::env::var("BSDEV_REPOS").ok().map(PathBuf::from).or(config.repos_dir),
             port: env_or("BSDEV_PORT", "2222").parse().unwrap_or(2222),
             user: env_or("BSDEV_USER", "bsdev"),
             key_path: state.join("id_ed25519"),
@@ -84,8 +86,38 @@ impl Settings {
         p.set_file_name(format!("{name}.pub"));
         p
     }
+
+    /// Persist `dir` as the repos directory in the config file, so future runs
+    /// use it without `BSDEV_REPOS` being set (that env var still overrides it
+    /// for a single run).
+    pub fn persist_repos_dir(dir: &Path) -> Result<()> {
+        let state = state_dir()?;
+        let mut config = Config::load(&state)?;
+        config.repos_dir = Some(dir.to_path_buf());
+        config.save(&state)
+    }
+
+    /// The currently persisted repos directory, if any (ignores `BSDEV_REPOS`).
+    pub fn persisted_repos_dir() -> Result<Option<PathBuf>> {
+        Ok(Config::load(&state_dir()?)?.repos_dir)
+    }
+
+    /// Remove the persisted repos directory from the config file.
+    pub fn clear_persisted_repos_dir() -> Result<()> {
+        let state = state_dir()?;
+        let mut config = Config::load(&state)?;
+        config.repos_dir = None;
+        config.save(&state)
+    }
 }
 
 fn env_or(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_string())
+}
+
+/// Machine-local state dir (e.g. ~/.local/share/bsdev, %LOCALAPPDATA%\bsdev\data),
+/// where the ssh key and config file live.
+fn state_dir() -> Result<PathBuf> {
+    let dirs = ProjectDirs::from("", "", "bsdev").ok_or(BsdevError::NoHome)?;
+    Ok(dirs.data_local_dir().to_path_buf())
 }

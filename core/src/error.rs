@@ -22,6 +22,9 @@ pub enum BsdevError {
 
     #[error("could not determine your home directory")]
     NoHome,
+
+    #[error("could not parse config file `{path}`: {source}")]
+    Config { path: std::path::PathBuf, source: serde_json::Error },
 }
 
 pub type Result<T> = std::result::Result<T, BsdevError>;

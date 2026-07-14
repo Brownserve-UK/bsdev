@@ -1,5 +1,6 @@
 use std::fs;
 use std::io::{IsTerminal, Write};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -27,6 +28,7 @@ fn main() -> Result<()> {
         Some(Command::Status) => status(&settings),
         Some(Command::Rebuild) => rebuild(&settings, verbose),
         Some(Command::Reset { yes }) => reset(&settings, verbose, yes),
+        Some(Command::Repos { path, unset }) => repos(path, unset),
     }
 }
 
@@ -190,6 +192,29 @@ fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
         docker::remove_volume(&settings.volume, verbose).context("Failed to remove the home volume")?;
     }
     println!("Reset complete. Run `bsdev` to start fresh.");
+    Ok(())
+}
+
+/// Get or persist the `BSDEV_REPOS` host directory (see `Settings::persist_repos_dir`).
+fn repos(path: Option<PathBuf>, unset: bool) -> Result<()> {
+    if unset {
+        Settings::clear_persisted_repos_dir().context("Failed to clear the persisted repos directory")?;
+        println!("Cleared the persisted repos directory.");
+        return Ok(());
+    }
+
+    if let Some(dir) = path {
+        Settings::persist_repos_dir(&dir).context("Failed to persist the repos directory")?;
+        println!("Persisted repos directory: {}", dir.display());
+        return Ok(());
+    }
+
+    match Settings::persisted_repos_dir().context("Failed to read the persisted repos directory")? {
+        Some(dir) => println!("{}", dir.display()),
+        None => println!(
+            "No repos directory persisted. Run `bsdev repos <path>` to set one, or set BSDEV_REPOS to override for a single run."
+        ),
+    }
     Ok(())
 }
 

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 
 /// `bsdev` - launch and connect to your personal dev container.
@@ -30,5 +32,17 @@ pub enum Command {
         /// Skip the confirmation prompt.
         #[arg(long, short = 'y')]
         yes: bool,
+    },
+    /// Get or persist the host directory bind-mounted at `~/host-repos`.
+    ///
+    /// With no arguments, prints the currently persisted directory. Give a
+    /// path to persist it (used on every future run without needing
+    /// `BSDEV_REPOS` set); `BSDEV_REPOS` still overrides it for a single run.
+    Repos {
+        /// Host directory to persist as the repos bind-mount source.
+        path: Option<PathBuf>,
+        /// Clear the persisted repos directory.
+        #[arg(long, conflicts_with = "path")]
+        unset: bool,
     },
 }
