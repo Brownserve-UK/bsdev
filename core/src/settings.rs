@@ -24,6 +24,9 @@ pub struct Settings {
     /// Private key used to reach the container. Lives in bsdev's own state dir
     /// (not ~/.ssh) - like Vagrant keeping its key under .vagrant.
     pub key_path: PathBuf,
+    /// Hostname of the machine bsdev is launched from, passed into the
+    /// container so it can tell which host it's attached to.
+    pub host_hostname: String,
 }
 
 impl Settings {
@@ -41,6 +44,11 @@ impl Settings {
             port: env_or("BSDEV_PORT", "2222").parse().unwrap_or(2222),
             user: env_or("BSDEV_USER", "bsdev"),
             key_path: state.join("id_ed25519"),
+            host_hostname: std::env::var("BSDEV_HOST_HOSTNAME").unwrap_or_else(|_| {
+                hostname::get()
+                    .map(|h| h.to_string_lossy().into_owned())
+                    .unwrap_or_else(|_| "unknown".to_string())
+            }),
         })
     }
 

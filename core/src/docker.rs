@@ -154,6 +154,8 @@ pub fn run_args(settings: &Settings, authorized_key: &str) -> Vec<String> {
         settings.home_mount(),
         "-e".to_string(),
         format!("BSDEV_AUTHORIZED_KEY={authorized_key}"),
+        "-e".to_string(),
+        format!("BSDEV_HOST_HOSTNAME={}", settings.host_hostname),
         settings.image.clone(),
     ]
 }
@@ -215,6 +217,7 @@ mod tests {
             port: 2222,
             user: "bsdev".to_string(),
             key_path: PathBuf::from("/state/bsdev/id_ed25519"),
+            host_hostname: "my-laptop".to_string(),
         }
     }
 
@@ -233,6 +236,7 @@ mod tests {
         assert!(has_pair(&args, "-p", "127.0.0.1:2222:22"));
         assert!(has_pair(&args, "-v", "/state/bsdev/home:/home/bsdev"));
         assert!(has_pair(&args, "-e", "BSDEV_AUTHORIZED_KEY=ssh-ed25519 AAAA test"));
+        assert!(has_pair(&args, "-e", "BSDEV_HOST_HOSTNAME=my-laptop"));
         // The image is always the final positional argument.
         assert_eq!(args.last().unwrap(), "ghcr.io/brownserve-uk/bsdev:latest");
     }
