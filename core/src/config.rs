@@ -17,6 +17,10 @@ pub struct Config {
     /// Host directory bind-mounted at `~/host-repos` (see `Settings::repos_mount`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repos_dir: Option<PathBuf>,
+    /// Host adb server port forwarded into the container (see `adbtunnel`). Unset
+    /// disables the tunnel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adb_port: Option<u16>,
 }
 
 impl Config {
@@ -60,7 +64,7 @@ mod tests {
     #[test]
     fn save_then_load_round_trips() {
         let dir = temp_state_dir("roundtrip");
-        let config = Config { repos_dir: Some(PathBuf::from("/some/host/path")) };
+        let config = Config { repos_dir: Some(PathBuf::from("/some/host/path")), adb_port: Some(5037) };
         config.save(&dir).unwrap();
         assert_eq!(Config::load(&dir).unwrap(), config);
         fs::remove_dir_all(&dir).ok();

@@ -45,4 +45,19 @@ pub enum Command {
         #[arg(long, conflicts_with = "path")]
         unset: bool,
     },
+    /// Get or persist the host adb server port forwarded into the container.
+    ///
+    /// With no arguments, prints the currently persisted port (or the default,
+    /// 5037, if enabling for the first time). Forwarding a port requires an
+    /// `adb` server already running on the host; every `bsdev up`/`bsdev`
+    /// restarts a dedicated background ssh tunnel that keeps it forwarded for
+    /// as long as the container is up, independent of any connect session.
+    /// `BSDEV_ADB_PORT` overrides the persisted port for a single run.
+    Adb {
+        /// Host adb server port to persist and forward (defaults to 5037).
+        port: Option<u16>,
+        /// Clear the persisted adb port (disables the tunnel).
+        #[arg(long, conflicts_with = "port")]
+        unset: bool,
+    },
 }

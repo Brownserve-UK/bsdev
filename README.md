@@ -56,6 +56,7 @@ Commands:
   status   Show image, container and home volume state
   rebuild  Pull the latest image and recreate the container (keeps the home volume)
   repos    Get or persist the host directory bind-mounted at ~/host-repos
+  adb      Get or persist the host adb server port forwarded into the container
 
 Options:
   -v, --verbose  Print each docker/ssh command as it runs
@@ -71,6 +72,14 @@ to override it for a single run (`bsdev repos --unset` clears the persisted
 value, `bsdev repos` with no arguments shows it). This is optional and off by
 default - a plain host directory can't hold Unix symlinks on Windows, so a
 repo relying on those should live in a WSL2/Linux-backed path instead.
+
+For Android dev, `bsdev adb [<port>]` (default 5037) forwards your host's adb
+server into the container over a dedicated background ssh tunnel, so `adb`
+inside the container reaches devices attached to the host - this keeps working
+even in a VSCode terminal after you've closed the terminal `bsdev` was launched
+from. Requires `adb start-server` already running on the host. Off by default;
+`bsdev adb --unset` disables it, and `bsdev adb` with no arguments shows the
+current port.
 
 ## Building
 
