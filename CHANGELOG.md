@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release
 
+## [v0.5.0](https://github.com/Brownserve-UK/bsdev/tree/v0.5.0) (2026-07-18)
+
+### Added
+
+- feat: add adb passthrough in [#25](https://github.com/Brownserve-UK/bsdev/pull/25) by [@shoddyguard](https://github.com/shoddyguard)
+
+
 ## [v0.4.1](https://github.com/Brownserve-UK/bsdev/tree/v0.4.1) (2026-07-14)
 
 ### Fixed
