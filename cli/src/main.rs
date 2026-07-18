@@ -6,11 +6,14 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 use bsdev_core::docker::{self, ContainerState};
-use bsdev_core::{codebridge, ssh, Settings};
+use bsdev_core::{adbtunnel, codebridge, ssh, Settings};
 
 mod cli;
 
 use cli::{Cli, Command};
+
+/// Default adb server port, used when `bsdev adb` is run with no explicit port.
+const DEFAULT_ADB_PORT: u16 = 5037;
 
 fn main() -> Result<()> {
     let args = Cli::parse();
@@ -29,6 +32,7 @@ fn main() -> Result<()> {
         Some(Command::Rebuild) => rebuild(&settings, verbose),
         Some(Command::Reset { yes }) => reset(&settings, verbose, yes),
         Some(Command::Repos { path, unset }) => repos(path, unset),
+        Some(Command::Adb { port, unset }) => adb(port, unset),
     }
 }
 
@@ -62,6 +66,11 @@ fn ensure_up(settings: &Settings, verbose: bool) -> Result<()> {
     // never need a recreate to reconnect.
     docker::ensure_authorized_key(settings, &pubkey, verbose)
         .context("Failed to authorize the bsdev key in the container")?;
+
+    // Restart the background adb tunnel (see `adbtunnel::start`) so it's alive
+    // for the container's whole session, independent of any connect session -
+    // a no-op unless an adb port is configured.
+    adbtunnel::start(settings, verbose).context("Failed to start the adb tunnel")?;
     Ok(())
 }
 
@@ -85,6 +94,7 @@ fn connect(settings: &Settings, verbose: bool) -> Result<()> {
 
 fn down(settings: &Settings, verbose: bool) -> Result<()> {
     docker::ensure_available().context("Docker is required to run bsdev")?;
+    adbtunnel::stop(settings, verbose);
     match docker::state(&settings.container)? {
         ContainerState::Missing => println!("No bsdev container to stop."),
         _ => {
@@ -97,6 +107,7 @@ fn down(settings: &Settings, verbose: bool) -> Result<()> {
 
 fn rebuild(settings: &Settings, verbose: bool) -> Result<()> {
     docker::ensure_available().context("Docker is required to run bsdev")?;
+    adbtunnel::stop(settings, verbose);
     println!("Pulling {} ...", settings.image);
     docker::pull_image(&settings.image, verbose)?;
 
@@ -140,6 +151,10 @@ fn status(settings: &Settings) -> Result<()> {
         println!("repos:     {}", repos_dir.display());
     }
     println!("key:       {}", settings.key_path.display());
+    match settings.adb_port {
+        Some(port) => println!("adb:       forwarding host port {port}"),
+        None => println!("adb:       disabled"),
+    }
     Ok(())
 }
 
@@ -182,6 +197,8 @@ fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
         }
     }
 
+    adbtunnel::stop(settings, verbose);
+
     // Remove the container first - it's using the home volume.
     if container_exists {
         println!("Removing the '{}' container ...", settings.container);
@@ -213,6 +230,31 @@ fn repos(path: Option<PathBuf>, unset: bool) -> Result<()> {
         Some(dir) => println!("{}", dir.display()),
         None => println!(
             "No repos directory persisted. Run `bsdev repos <path>` to set one, or set BSDEV_REPOS to override for a single run."
+        ),
+    }
+    Ok(())
+}
+
+/// Get or persist the host adb server port forwarded into the container (see
+/// `Settings::persist_adb_port`). Takes effect on the next `bsdev up`/`bsdev`,
+/// which restarts the background tunnel to match.
+fn adb(port: Option<u16>, unset: bool) -> Result<()> {
+    if unset {
+        Settings::clear_persisted_adb_port().context("Failed to clear the persisted adb port")?;
+        println!("Cleared the persisted adb port. Run `bsdev up` (or `bsdev`) to stop the tunnel.");
+        return Ok(());
+    }
+
+    if let Some(port) = port {
+        Settings::persist_adb_port(port).context("Failed to persist the adb port")?;
+        println!("Persisted adb port: {port}. Run `bsdev up` (or `bsdev`) to start forwarding it.");
+        return Ok(());
+    }
+
+    match Settings::persisted_adb_port().context("Failed to read the persisted adb port")? {
+        Some(port) => println!("{port}"),
+        None => println!(
+            "No adb port persisted. Run `bsdev adb [<port>]` to set one (defaults to {DEFAULT_ADB_PORT}), or set BSDEV_ADB_PORT to override for a single run."
         ),
     }
     Ok(())

@@ -34,6 +34,13 @@ pub struct Settings {
     /// Hostname of the machine bsdev is launched from, passed into the
     /// container so it can tell which host it's attached to.
     pub host_hostname: String,
+    /// Host adb server port reverse-forwarded into the container over a
+    /// dedicated background ssh tunnel (see `adbtunnel`), so `adb` inside the
+    /// container reaches devices attached to the host. `None` (the default)
+    /// disables the tunnel entirely - most bsdev users don't do Android dev.
+    /// Resolved from `BSDEV_ADB_PORT` if set, else from the persisted config
+    /// written by `bsdev adb [<port>]` (see `Settings::persist_adb_port`).
+    pub adb_port: Option<u16>,
 }
 
 impl Settings {
@@ -54,6 +61,10 @@ impl Settings {
                     .map(|h| h.to_string_lossy().into_owned())
                     .unwrap_or_else(|_| "unknown".to_string())
             }),
+            adb_port: std::env::var("BSDEV_ADB_PORT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .or(config.adb_port),
         })
     }
 
@@ -108,6 +119,34 @@ impl Settings {
         let mut config = Config::load(&state)?;
         config.repos_dir = None;
         config.save(&state)
+    }
+
+    /// Persist `port` as the adb tunnel port, so future runs forward it without
+    /// `BSDEV_ADB_PORT` being set (that env var still overrides it for a single run).
+    pub fn persist_adb_port(port: u16) -> Result<()> {
+        let state = state_dir()?;
+        let mut config = Config::load(&state)?;
+        config.adb_port = Some(port);
+        config.save(&state)
+    }
+
+    /// The currently persisted adb tunnel port, if any (ignores `BSDEV_ADB_PORT`).
+    pub fn persisted_adb_port() -> Result<Option<u16>> {
+        Ok(Config::load(&state_dir()?)?.adb_port)
+    }
+
+    /// Remove the persisted adb tunnel port from the config file.
+    pub fn clear_persisted_adb_port() -> Result<()> {
+        let state = state_dir()?;
+        let mut config = Config::load(&state)?;
+        config.adb_port = None;
+        config.save(&state)
+    }
+
+    /// Path to the PID file tracking the background adb tunnel process (lives
+    /// alongside the ssh key in bsdev's state dir).
+    pub fn adb_tunnel_pid_path(&self) -> PathBuf {
+        self.key_path.with_file_name("adb-tunnel.pid")
     }
 }
 

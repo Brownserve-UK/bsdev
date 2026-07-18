@@ -5,6 +5,7 @@
 //! reused. This crate never installs tooling or provisions the container - that
 //! is the image's and chezmoi's job respectively.
 
+pub mod adbtunnel;
 pub mod codebridge;
 pub mod config;
 pub mod docker;

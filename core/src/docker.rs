@@ -136,6 +136,7 @@ mod tests {
             user: "bsdev".to_string(),
             key_path: PathBuf::from("/state/bsdev/id_ed25519"),
             host_hostname: "my-laptop".to_string(),
+            adb_port: None,
         }
     }
 

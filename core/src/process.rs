@@ -1,5 +1,5 @@
 use std::ffi::OsStr;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use crate::error::{BsdevError, Result};
 
@@ -43,6 +43,48 @@ pub fn capture(program: &str, args: &[&str]) -> Result<Option<String>> {
     } else {
         Ok(None)
     }
+}
+
+/// Spawn `program` fully detached from this process (no inherited stdio, no
+/// shared process group/console), so it keeps running after this process (and
+/// its controlling terminal) exits. Used for the background adb tunnel, which
+/// must outlive the terminal `bsdev` was launched from. Returns the child's PID
+/// without waiting for it to exit.
+pub fn spawn_detached<I, S>(program: &str, args: I, verbose: bool) -> Result<u32>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let args: Vec<S> = args.into_iter().collect();
+    if verbose {
+        let rendered: Vec<String> = args
+            .iter()
+            .map(|a| a.as_ref().to_string_lossy().into_owned())
+            .collect();
+        eprintln!("+ {} {} (detached)", program, rendered.join(" "));
+    }
+    let mut cmd = Command::new(program);
+    cmd.args(&args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    detach(&mut cmd);
+    let child = cmd.spawn().map_err(map_spawn(program))?;
+    Ok(child.id())
+}
+
+/// Detach the child from this process's console/process group so a closed
+/// terminal (or exiting parent) doesn't take it down too.
+#[cfg(windows)]
+fn detach(cmd: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
+    cmd.creation_flags(0x00000008 | 0x00000200 | 0x08000000);
+}
+
+#[cfg(not(windows))]
+fn detach(cmd: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    // A fresh process group so the terminal's SIGHUP (on hangup/close) targets
+    // the old foreground group, not this one.
+    cmd.process_group(0);
 }
 
 fn map_spawn(program: &str) -> impl Fn(std::io::Error) -> BsdevError + '_ {

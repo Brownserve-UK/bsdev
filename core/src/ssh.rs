@@ -31,16 +31,12 @@ pub fn read_pubkey(settings: &Settings) -> Result<String> {
     Ok(fs::read_to_string(settings.pubkey_path())?.trim().to_string())
 }
 
-/// Build the explicit `ssh` argument vector. Deliberately self-contained (does
-/// not rely on the `Host bsdev` alias in ~/.ssh/config), so the launcher works
-/// even before chezmoi has deployed that config.
-pub fn connect_args(settings: &Settings) -> Vec<String> {
+/// The ssh args shared by every session into the container: explicit key/port,
+/// and host-key handling. Deliberately self-contained (does not rely on the
+/// `Host bsdev` alias in ~/.ssh/config), so the launcher works even before
+/// chezmoi has deployed that config.
+fn base_args(settings: &Settings) -> Vec<String> {
     vec![
-        "-t".to_string(),
-        // Reverse-forward the code bridge port so the in-container `code` shim can
-        // reach the host listener spawned by codebridge::spawn_listener.
-        "-R".to_string(),
-        format!("127.0.0.1:{p}:127.0.0.1:{p}", p = codebridge::CODE_PORT),
         "-p".to_string(),
         settings.port.to_string(),
         "-i".to_string(),
@@ -63,6 +59,32 @@ pub fn connect_args(settings: &Settings) -> Vec<String> {
         "LogLevel=ERROR".to_string(),
         format!("{}@127.0.0.1", settings.user),
     ]
+}
+
+/// Build the explicit `ssh` argument vector for the interactive connect session.
+pub fn connect_args(settings: &Settings) -> Vec<String> {
+    let mut args = vec![
+        "-t".to_string(),
+        // Reverse-forward the code bridge port so the in-container `code` shim can
+        // reach the host listener spawned by codebridge::spawn_listener.
+        "-R".to_string(),
+        format!("127.0.0.1:{p}:127.0.0.1:{p}", p = codebridge::CODE_PORT),
+    ];
+    args.extend(base_args(settings));
+    args
+}
+
+/// Build the `ssh` argument vector for the dedicated background adb tunnel (see
+/// `adbtunnel`): no pty/remote command (`-N`), just a reverse-forward of `port`
+/// so the container's `adb` reaches the host's adb server on the same port.
+pub fn adb_tunnel_args(settings: &Settings, port: u16) -> Vec<String> {
+    let mut args = vec![
+        "-N".to_string(),
+        "-R".to_string(),
+        format!("127.0.0.1:{p}:127.0.0.1:{p}", p = port),
+    ];
+    args.extend(base_args(settings));
+    args
 }
 
 /// The platform's null device, used as an ssh `UserKnownHostsFile` so container
@@ -102,6 +124,7 @@ mod tests {
             user: "bsdev".to_string(),
             key_path: PathBuf::from("/state/bsdev/id_ed25519"),
             host_hostname: "my-laptop".to_string(),
+            adb_port: None,
         }
     }
 
@@ -120,6 +143,20 @@ mod tests {
         assert!(args
             .iter()
             .any(|a| a.starts_with("UserKnownHostsFile=") && (a.ends_with("/dev/null") || a.ends_with("NUL"))));
+        assert_eq!(args.last().unwrap(), "bsdev@127.0.0.1");
+    }
+
+    #[test]
+    fn adb_tunnel_args_are_a_bare_reverse_forward() {
+        let a = settings();
+        let args = adb_tunnel_args(&a, 5037);
+        assert!(args.contains(&"-N".to_string()));
+        // No pty and no code-bridge forward - just the adb reverse-forward.
+        assert!(!args.contains(&"-t".to_string()));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "-R" && w[1] == "127.0.0.1:5037:127.0.0.1:5037"));
+        assert!(args.windows(2).any(|w| w[0] == "-p" && w[1] == "2222"));
         assert_eq!(args.last().unwrap(), "bsdev@127.0.0.1");
     }
 }
