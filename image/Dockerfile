@@ -37,7 +37,7 @@ RUN useradd -m -G wheel,users -s /usr/bin/fish "${BSDEV_USER}" \
 # The marker chezmoi and the shell rc files test for to detect the container.
 RUN touch /etc/bsdev-container
 
-# AUR tooling + Claude Code, installed as the login user (makepkg refuses to run
+# AUR tooling, Claude Code + codex, installed as the login user (makepkg refuses to run
 # as root; the native Claude installer drops a self-updating binary in ~/.local/bin)
 # Which topgrade can handle upgrading.
 # Fetches from aur.archlinux.org are occasionally flaky in CI (transient TLS
@@ -51,7 +51,8 @@ RUN export HOME="/home/${BSDEV_USER}"; \
     && rm -rf "$tmp" \
     && retry yay -S --needed --noconfirm oh-my-posh-bin tenv-bin topgrade-bin \
         android-sdk-cmdline-tools-latest android-sdk-platform-tools android-sdk-build-tools \
-    && retry sh -c "curl -fsSL https://claude.ai/install.sh | bash"
+    && retry sh -c "curl -fsSL https://claude.ai/install.sh | bash" \
+    && retry sh -c "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
 
 # rustup itself comes from the official repos above; install+select the stable
 # toolchain (rustc, cargo, rustfmt, clippy) by default so it's ready out of the
