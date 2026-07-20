@@ -19,6 +19,12 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// Update bsdev to the latest published release.
+    Update {
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
     /// Ensure the image and container are up, without connecting.
     Up,
     /// Stop the container (its home volume is preserved).
@@ -60,4 +66,30 @@ pub enum Command {
         #[arg(long, conflicts_with = "port")]
         unset: bool,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::{Cli, Command};
+
+    #[test]
+    fn parses_update_command() {
+        let cli = Cli::try_parse_from(["bsdev", "update"]).unwrap();
+
+        assert!(matches!(cli.command, Some(Command::Update { yes: false })));
+    }
+
+    #[test]
+    fn parses_update_yes_flag() {
+        let cli = Cli::try_parse_from(["bsdev", "update", "--yes"]).unwrap();
+
+        assert!(matches!(cli.command, Some(Command::Update { yes: true })));
+    }
+
+    #[test]
+    fn rejects_unknown_update_arguments() {
+        assert!(Cli::try_parse_from(["bsdev", "update", "--unknown"]).is_err());
+    }
 }

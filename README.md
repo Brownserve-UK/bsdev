@@ -51,6 +51,7 @@ extension installed.
 Usage: bsdev [OPTIONS] [COMMAND]
 
 Commands:
+  update   Update bsdev to the latest published release
   up       Ensure the image and container are up, without connecting
   down     Stop the container (its home volume is preserved)
   status   Show image, container and home volume state
@@ -63,6 +64,21 @@ Options:
   -h, --help     Print help
   -V, --version  Print version
 ```
+
+## Updating
+
+Run `bsdev update` to check GitHub for the latest published release and replace
+the installed executable after confirmation. For non-interactive use, pass
+`--yes` (or `-y`) to skip the prompt:
+
+```sh
+bsdev update --yes
+```
+
+If bsdev was installed system-wide, the command will explain that it needs to
+be rerun with `sudo` on Linux/macOS or from an Administrator terminal on
+Windows. Updates are only checked when this command is run; normal bsdev usage
+does not make update requests.
 
 If you want code changes made inside the container reachable from the host
 (e.g. to run integration tests in host VMs), point bsdev at a host directory;

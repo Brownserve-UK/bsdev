@@ -9,6 +9,7 @@ use bsdev_core::docker::{self, ContainerState};
 use bsdev_core::{adbtunnel, codebridge, ssh, Settings};
 
 mod cli;
+mod update;
 
 use cli::{Cli, Command};
 
@@ -17,11 +18,22 @@ const DEFAULT_ADB_PORT: u16 = 5037;
 
 fn main() -> Result<()> {
     let args = Cli::parse();
+
+    // Updating must not load container settings. In particular, a system-wide
+    // install may need to be updated with elevated privileges, and that should
+    // not read or create configuration for the elevated account.
+    if let Some(Command::Update { yes }) = &args.command {
+        return update::run(*yes);
+    }
+
     let settings = Settings::load().context("Failed to determine bsdev settings")?;
     let verbose = args.verbose;
 
     match args.command {
         None => connect(&settings, verbose),
+        Some(Command::Update { .. }) => {
+            unreachable!("updates are handled before settings are loaded")
+        }
         Some(Command::Up) => {
             ensure_up(&settings, verbose)?;
             println!("bsdev is up. Run `bsdev` to connect.");
