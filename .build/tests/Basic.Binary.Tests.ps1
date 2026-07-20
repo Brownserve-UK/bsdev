@@ -34,5 +34,16 @@ Describe 'bsdev binary' {
             $Output = & $script:BinaryPath --version 2>&1
             $Output | Should -Match 'bsdev'
         }
+
+        It 'should include the update command in --help output' {
+            $Output = & $script:BinaryPath --help 2>&1
+            ($Output -join "`n") | Should -Match 'update'
+        }
+
+        It 'should expose the non-interactive update flag' {
+            $Output = & $script:BinaryPath update --help 2>&1
+            $LASTEXITCODE | Should -Be 0
+            ($Output -join "`n") | Should -Match '--yes'
+        }
     }
 }
