@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release
 
+## [v0.6.0](https://github.com/Brownserve-UK/bsdev/tree/v0.6.0) (2026-07-20)
+
+### Added
+
+- feat: add codex cli to the container in [#29](https://github.com/Brownserve-UK/bsdev/pull/29) by [@shoddyguard](https://github.com/shoddyguard)
+- feat: add self-update command in [#28](https://github.com/Brownserve-UK/bsdev/pull/28) by [@shoddyguard](https://github.com/shoddyguard)
+
+### Fixed
+
+- fix: stop reverse ssh for adb getting killed in [#27](https://github.com/Brownserve-UK/bsdev/pull/27) by [@shoddyguard](https://github.com/shoddyguard)
+
+
 ## [v0.5.0](https://github.com/Brownserve-UK/bsdev/tree/v0.5.0) (2026-07-18)
 
 ### Added
