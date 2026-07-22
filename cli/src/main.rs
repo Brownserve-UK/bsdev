@@ -82,8 +82,13 @@ fn ensure_up(settings: &Settings, verbose: bool) -> Result<()> {
 
     // Restart the background adb tunnel (see `adbtunnel::start`) so it's alive
     // for the container's whole session, independent of any connect session -
-    // a no-op unless an adb port is configured.
-    adbtunnel::start(settings, verbose).context("Failed to start the adb tunnel")?;
+    // a no-op unless an adb port is configured. The container's StartedAt is
+    // passed through so a stale tunnel from a previous container session gets
+    // detected and replaced rather than mistaken for a working one.
+    let container_started_at = docker::started_at(&settings.container)
+        .context("Failed to inspect the bsdev container")?
+        .unwrap_or_default();
+    adbtunnel::start(settings, &container_started_at, verbose).context("Failed to start the adb tunnel")?;
     Ok(())
 }
 

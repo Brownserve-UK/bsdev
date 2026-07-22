@@ -47,6 +47,15 @@ pub fn volume_present(volume: &str) -> Result<bool> {
     Ok(process::capture(DOCKER, &["volume", "inspect", volume])?.is_some())
 }
 
+/// The container's current `State.StartedAt` timestamp, `None` if it's missing.
+/// The container ID survives a plain `restart`, but this always changes on one -
+/// which is the signal we actually care about for the adb tunnel: a restart
+/// kills sshd, so any tunnel dialled into the old session is dead too, even
+/// though its host-side ssh process may still be sat there alive.
+pub fn started_at(container: &str) -> Result<Option<String>> {
+    process::capture(DOCKER, &["inspect", "-f", "{{.State.StartedAt}}", container])
+}
+
 /// Build the `docker run` argument vector. Pure so it can be unit-tested without
 /// a Docker daemon. The public key is injected via an env var (read in Rust, not
 /// via a shell `cat`) so this stays cross-platform.
