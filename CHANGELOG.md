@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release
 
+## [v0.7.0](https://github.com/Brownserve-UK/bsdev/tree/v0.7.0) (2026-07-22)
+
+### Added
+
+- feat: add port forwarding via `ssh -L` in [#31](https://github.com/Brownserve-UK/bsdev/pull/31) by [@shoddyguard](https://github.com/shoddyguard)
+
+### Fixed
+
+- fix: adb tunnel persistence in [#32](https://github.com/Brownserve-UK/bsdev/pull/32) by [@shoddyguard](https://github.com/shoddyguard)
+
+
 ## [v0.6.0](https://github.com/Brownserve-UK/bsdev/tree/v0.6.0) (2026-07-20)
 
 ### Added
