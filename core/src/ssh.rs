@@ -87,6 +87,16 @@ pub fn adb_tunnel_args(settings: &Settings, port: u16) -> Vec<String> {
     args
 }
 
+pub fn local_forward_args(settings: &Settings, port: u16) -> Vec<String> {
+    let mut args = vec![
+        "-N".to_string(),
+        "-L".to_string(),
+        format!("127.0.0.1:{p}:127.0.0.1:{p}", p = port),
+    ];
+    args.extend(base_args(settings));
+    args
+}
+
 /// The platform's null device, used as an ssh `UserKnownHostsFile` so container
 /// host keys are neither stored nor checked.
 #[cfg(windows)]
@@ -156,6 +166,19 @@ mod tests {
         assert!(args
             .windows(2)
             .any(|w| w[0] == "-R" && w[1] == "127.0.0.1:5037:127.0.0.1:5037"));
+        assert!(args.windows(2).any(|w| w[0] == "-p" && w[1] == "2222"));
+        assert_eq!(args.last().unwrap(), "bsdev@127.0.0.1");
+    }
+
+    #[test]
+    fn local_forward_args_are_a_bare_forward_in_the_opposite_direction() {
+        let a = settings();
+        let args = local_forward_args(&a, 1455);
+        assert!(args.contains(&"-N".to_string()));
+        assert!(!args.contains(&"-t".to_string()));
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "-L" && w[1] == "127.0.0.1:1455:127.0.0.1:1455"));
         assert!(args.windows(2).any(|w| w[0] == "-p" && w[1] == "2222"));
         assert_eq!(args.last().unwrap(), "bsdev@127.0.0.1");
     }

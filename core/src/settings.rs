@@ -148,6 +148,10 @@ impl Settings {
     pub fn adb_tunnel_pid_path(&self) -> PathBuf {
         self.key_path.with_file_name("adb-tunnel.pid")
     }
+
+    pub fn forward_pid_path(&self, port: u16) -> PathBuf {
+        self.key_path.with_file_name(format!("forward-{port}.pid"))
+    }
 }
 
 fn env_or(key: &str, default: &str) -> String {

@@ -10,9 +10,11 @@ pub mod codebridge;
 pub mod config;
 pub mod docker;
 pub mod error;
+pub mod forward;
 pub mod process;
 pub mod settings;
 pub mod ssh;
+mod tunnel;
 
 pub use error::{BsdevError, Result};
 pub use settings::Settings;

@@ -1,10 +1,10 @@
 use std::fs;
-use std::process::{Command, Stdio};
 
 use crate::error::Result;
 use crate::process;
 use crate::settings::Settings;
 use crate::ssh;
+use crate::tunnel::{is_alive, kill};
 
 const SSH: &str = "ssh";
 
@@ -63,44 +63,6 @@ fn parse_tracked(contents: &str) -> Option<(u32, Option<u16>)> {
 
 fn read_tracked(settings: &Settings) -> Option<(u32, Option<u16>)> {
     parse_tracked(&fs::read_to_string(settings.adb_tunnel_pid_path()).ok()?)
-}
-
-/// Best-effort kill, discarding the child's own stdout/stderr - unlike
-/// `process::run`'s deliberately inherited stdio, `taskkill`/`kill` chatter
-/// ("SUCCESS: ...", "No such process") isn't something the user needs to see
-/// on every `bsdev up`/`bsdev` restarting the tunnel.
-fn run_quiet(program: &str, args: &[&str], verbose: bool) {
-    if verbose {
-        eprintln!("+ {} {}", program, args.join(" "));
-    }
-    let _ = Command::new(program).args(args).stdout(Stdio::null()).stderr(Stdio::null()).status();
-}
-
-#[cfg(windows)]
-fn kill(pid: u32, verbose: bool) {
-    run_quiet("taskkill", &["/PID", &pid.to_string(), "/F"], verbose);
-}
-
-#[cfg(not(windows))]
-fn kill(pid: u32, verbose: bool) {
-    run_quiet("kill", &["-TERM", &pid.to_string()], verbose);
-}
-
-/// Whether a process with `pid` is currently running.
-#[cfg(windows)]
-fn is_alive(pid: u32) -> bool {
-    let filter = format!("PID eq {pid}");
-    match process::capture("tasklist", &["/FI", &filter, "/NH"]) {
-        // No match still exits 0 and just prints an "INFO: No tasks ..." line.
-        Ok(Some(out)) => out.contains(&pid.to_string()),
-        _ => false,
-    }
-}
-
-#[cfg(not(windows))]
-fn is_alive(pid: u32) -> bool {
-    // `kill -0` sends no signal, just checks the process exists and is ours to signal.
-    matches!(process::capture("kill", &["-0", &pid.to_string()]), Ok(Some(_)))
 }
 
 #[cfg(test)]

@@ -66,6 +66,18 @@ pub enum Command {
         #[arg(long, conflicts_with = "port")]
         unset: bool,
     },
+    /// Forward a host port to the same port inside the container, e.g. to let
+    /// a browser reach an OAuth callback server listening inside the
+    /// container. Starts a detached background tunnel and returns
+    /// immediately, so it doesn't tie up the terminal; stop it with
+    /// `bsdev forward <port> --stop` once done.
+    Forward {
+        /// Port to forward (same on both host and container).
+        port: u16,
+        /// Stop a previously started forward for this port.
+        #[arg(long)]
+        stop: bool,
+    },
 }
 
 #[cfg(test)]

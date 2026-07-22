@@ -58,6 +58,7 @@ Commands:
   rebuild  Pull the latest image and recreate the container (keeps the home volume)
   repos    Get or persist the host directory bind-mounted at ~/host-repos
   adb      Get or persist the host adb server port forwarded into the container
+  forward  Forward a host port to the same port inside the container
 
 Options:
   -v, --verbose  Print each docker/ssh command as it runs
