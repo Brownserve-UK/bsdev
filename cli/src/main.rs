@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 use bsdev_core::docker::{self, ContainerState};
-use bsdev_core::{adbtunnel, codebridge, ssh, Settings};
+use bsdev_core::{adbtunnel, codebridge, forward, ssh, Settings};
 
 mod cli;
 mod update;
@@ -45,6 +45,7 @@ fn main() -> Result<()> {
         Some(Command::Reset { yes }) => reset(&settings, verbose, yes),
         Some(Command::Repos { path, unset }) => repos(path, unset),
         Some(Command::Adb { port, unset }) => adb(port, unset),
+        Some(Command::Forward { port, stop }) => forward_port(&settings, port, stop, verbose),
     }
 }
 
@@ -269,6 +270,18 @@ fn adb(port: Option<u16>, unset: bool) -> Result<()> {
             "No adb port persisted. Run `bsdev adb [<port>]` to set one (defaults to {DEFAULT_ADB_PORT}), or set BSDEV_ADB_PORT to override for a single run."
         ),
     }
+    Ok(())
+}
+
+fn forward_port(settings: &Settings, port: u16, stop: bool, verbose: bool) -> Result<()> {
+    if stop {
+        forward::stop(settings, port, verbose);
+        println!("Stopped forwarding port {port}.");
+        return Ok(());
+    }
+
+    forward::start(settings, port, verbose).context("Failed to start the port forward")?;
+    println!("Forwarding host port {port} -> container port {port}. Run `bsdev forward {port} --stop` when done.");
     Ok(())
 }
 
