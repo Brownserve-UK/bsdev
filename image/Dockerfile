@@ -49,7 +49,7 @@ RUN export HOME="/home/${BSDEV_USER}"; \
     && retry git clone https://aur.archlinux.org/yay-bin.git "$tmp" \
     && ( cd "$tmp" && makepkg -si --noconfirm ) \
     && rm -rf "$tmp" \
-    && retry yay -S --needed --noconfirm oh-my-posh-bin tenv-bin topgrade-bin \
+    && retry yay -S --needed --noconfirm oh-my-posh-bin tenv-bin topgrade-bin powershell-bin \
         android-sdk-cmdline-tools-latest android-sdk-platform-tools android-sdk-build-tools \
     && retry sh -c "curl -fsSL https://claude.ai/install.sh | bash" \
     && retry sh -c "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
