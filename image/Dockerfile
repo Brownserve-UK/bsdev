@@ -25,7 +25,16 @@ RUN pacman -Sy --needed --noconfirm archlinux-keyring \
         github-cli fish fastfetch wget chezmoi \
         rustup nodejs npm \
         jdk21-openjdk \
+        nss nspr atk at-spi2-core at-spi2-atk cups libdrm mesa alsa-lib \
+        pango cairo gtk3 ttf-liberation \
     && pacman -Scc --noconfirm
+
+RUN npm config set min-release-age 1 --location=global
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+RUN npm install -g playwright \
+    && playwright install chromium \
+    && chmod -R a+rX ${PLAYWRIGHT_BROWSERS_PATH}
 
 # Create the login user in wheel with validated passwordless sudo (a typo can't
 # lock us out), with fish as the login shell.
