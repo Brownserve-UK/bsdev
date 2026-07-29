@@ -24,6 +24,7 @@ RUN pacman -Sy --needed --noconfirm archlinux-keyring \
         base-devel git openssh sudo nano curl \
         github-cli fish fastfetch wget chezmoi \
         rustup nodejs npm \
+        ffmpeg \
         jdk21-openjdk \
         nss nspr atk at-spi2-core at-spi2-atk cups libdrm mesa alsa-lib \
         pango cairo gtk3 ttf-liberation \
