@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release
 
+## [v0.8.0](https://github.com/Brownserve-UK/bsdev/tree/v0.8.0) (2026-08-13)
+
+### Added
+
+- feat: include ffmpeg in the container in [#38](https://github.com/Brownserve-UK/bsdev/pull/38) by [@shoddyguard](https://github.com/shoddyguard)
+- feat: add playwright to the container in [#37](https://github.com/Brownserve-UK/bsdev/pull/37) by [@shoddyguard](https://github.com/shoddyguard)
+- feat: add pwsh to container in [#36](https://github.com/Brownserve-UK/bsdev/pull/36) by [@shoddyguard](https://github.com/shoddyguard)
+
+### Changed
+
+- build(deps): bump self_update from 0.43.1 to 0.44.0 in [#34](https://github.com/Brownserve-UK/bsdev/pull/34) by [@dependabot[bot]](https://github.com/apps/dependabot)
+
+
 ## [v0.7.0](https://github.com/Brownserve-UK/bsdev/tree/v0.7.0) (2026-07-22)
 
 ### Added
