@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release
 
+## [v0.9.0](https://github.com/Brownserve-UK/bsdev/tree/v0.9.0) (2026-08-24)
+
+### Added
+
+- feat: add Docker in Docker in [#41](https://github.com/Brownserve-UK/bsdev/pull/41) by [@shoddyguard](https://github.com/shoddyguard)
+
+
 ## [v0.8.0](https://github.com/Brownserve-UK/bsdev/tree/v0.8.0) (2026-08-13)
 
 ### Added
