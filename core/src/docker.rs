@@ -78,6 +78,13 @@ pub fn run_args(settings: &Settings, authorized_key: &str) -> Vec<String> {
         args.push("-v".to_string());
         args.push(repos_mount);
     }
+    if settings.dind {
+        args.push("--privileged".to_string());
+        args.push("-v".to_string());
+        args.push(settings.docker_data_mount());
+        args.push("-e".to_string());
+        args.push("BSDEV_DIND=1".to_string());
+    }
     args.push("-e".to_string());
     args.push(format!("BSDEV_AUTHORIZED_KEY={authorized_key}"));
     args.push("-e".to_string());
@@ -146,6 +153,8 @@ mod tests {
             key_path: PathBuf::from("/state/bsdev/id_ed25519"),
             host_hostname: "my-laptop".to_string(),
             adb_port: None,
+            dind: false,
+            docker_volume: "bsdev-docker".to_string(),
         }
     }
 
@@ -189,5 +198,23 @@ mod tests {
         s.repos_dir = Some(PathBuf::from("/host/repos"));
         let args = run_args(&s, "k");
         assert!(has_pair(&args, "-v", "/host/repos:/home/bsdev/host-repos"));
+    }
+
+    #[test]
+    fn run_args_omits_privileged_and_docker_volume_when_dind_disabled() {
+        let args = run_args(&settings(), "k");
+        assert!(!args.contains(&"--privileged".to_string()));
+        assert!(!args.iter().any(|a| a == "bsdev-docker:/var/lib/docker"));
+        assert!(!has_pair(&args, "-e", "BSDEV_DIND=1"));
+    }
+
+    #[test]
+    fn run_args_includes_privileged_and_docker_volume_when_dind_enabled() {
+        let mut s = settings();
+        s.dind = true;
+        let args = run_args(&s, "k");
+        assert!(args.contains(&"--privileged".to_string()));
+        assert!(has_pair(&args, "-v", "bsdev-docker:/var/lib/docker"));
+        assert!(has_pair(&args, "-e", "BSDEV_DIND=1"));
     }
 }

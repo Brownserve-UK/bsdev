@@ -28,6 +28,7 @@ RUN pacman -Sy --needed --noconfirm archlinux-keyring \
         jdk21-openjdk \
         nss nspr atk at-spi2-core at-spi2-atk cups libdrm mesa alsa-lib \
         pango cairo gtk3 ttf-liberation \
+        docker docker-compose \
     && pacman -Scc --noconfirm
 
 RUN npm config set min-release-age 1 --location=global
@@ -39,7 +40,7 @@ RUN npm install -g playwright \
 
 # Create the login user in wheel with validated passwordless sudo (a typo can't
 # lock us out), with fish as the login shell.
-RUN useradd -m -G wheel,users -s /usr/bin/fish "${BSDEV_USER}" \
+RUN useradd -m -G wheel,users,docker -s /usr/bin/fish "${BSDEV_USER}" \
     && printf '%%wheel ALL=(ALL:ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/10-wheel-nopasswd \
     && chmod 0440 /etc/sudoers.d/10-wheel-nopasswd \
     && visudo -cf /etc/sudoers.d/10-wheel-nopasswd

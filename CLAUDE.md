@@ -17,22 +17,32 @@ host's VSCode.
     directory at `~/host-repos` (unset by default) so code changes are reachable from the host,
     e.g. for running integration tests in host VMs; resolved from `BSDEV_REPOS` if set, else from
     `config.json` (see `config.rs`), persisted via `bsdev repos <path>` / `Settings::persist_repos_dir`.
-    The ssh key lives in a bsdev state dir via the `directories` crate (NOT `~/.ssh`).
+    `adb_port` optionally forwards a host adb server port into the container (unset/disabled by
+    default); resolved from `BSDEV_ADB_PORT` if set, else from `config.json`, persisted via
+    `bsdev adb [<port>]` / `Settings::persist_adb_port`. The ssh key lives in a bsdev state dir via
+    the `directories` crate (NOT `~/.ssh`).
   - `config.rs` - `Config`: a `serde`-derived struct (JSON, `serde_json`) persisted at
-    `<state dir>/config.json`, holding user settings across runs (currently just `repos_dir`). Every
+    `<state dir>/config.json`, holding user settings across runs (`repos_dir`, `adb_port`). Every
     field is optional so the file can grow without breaking older configs.
   - `docker.rs` - pure arg-builders (`run_args`, tested) + wrappers (`state`, `pull_image`,
     `run_container`, `ensure_authorized_key`, `remove`, `remove_volume`, ...).
-  - `ssh.rs` - `ensure_keypair`, `read_pubkey`, and `connect` with explicit args (no reliance on
-    `~/.ssh/config`; host keys are discarded via `UserKnownHostsFile=/dev/null` +
-    `StrictHostKeyChecking=no`, the way `vagrant ssh` does, since the container's host keys change
-    on recreate).
+  - `ssh.rs` - `ensure_keypair`, `read_pubkey`, `connect_args`/`connect` (interactive session) and
+    `adb_tunnel_args` (background adb tunnel, see `adbtunnel.rs`), sharing a common `base_args` - all
+    explicit (no reliance on `~/.ssh/config`; host keys are discarded via
+    `UserKnownHostsFile=/dev/null` + `StrictHostKeyChecking=no`, the way `vagrant ssh` does, since the
+    container's host keys change on recreate).
   - `codebridge.rs` - the reverse `code` channel (see below).
-  - `process.rs` - `Command` runner with inherited stdio (real TTY) + friendly not-found errors.
+  - `adbtunnel.rs` - `start`/`stop` for a dedicated, detached background `ssh -N -R` tunnel that
+    reverse-forwards the host's adb server port into the container, tracked via a PID file (see
+    "adb passthrough" below).
+  - `process.rs` - `Command` runners: `run`/`capture` with inherited stdio (real TTY) + friendly
+    not-found errors, and `spawn_detached` (no inherited stdio, no shared process group/console -
+    survives the parent exiting) used by the adb tunnel.
 - `cli/` (crate `bsdev`, `[[bin]] name = "bsdev"`) - thin clap shell, `anyhow`:
   - `cli.rs` - clap types; `main.rs` - dispatch + command handlers.
   - Commands: `bsdev` (default: ensure up + connect), `up`, `down`, `status`, `rebuild`, `reset`,
-    `repos` (get/persist/unset the `~/host-repos` bind-mount source directory).
+    `repos` (get/persist/unset the `~/host-repos` bind-mount source directory), `adb` (get/persist/
+    unset the forwarded host adb server port).
 - `image/` - the container image (published to `ghcr.io/brownserve-uk/bsdev` by CI):
   - `Dockerfile` - Arch, `bsdev` user + passwordless sudo, sshd as PID 1, `/etc/bsdev-container`
     marker, ALL tooling baked in (gh, chezmoi, git, fish, Node, Rust via rustup, oh-my-posh, tenv,
@@ -47,13 +57,31 @@ host's VSCode.
 
 - **Connect flow** (`ensure_up` in `cli/src/main.rs`): ensure Docker -> ensure keypair -> read
   pubkey -> pull image if missing -> run/start container -> `ensure_authorized_key` (docker exec,
-  idempotent, so a persisted volume or rotated key just works) -> start the code-bridge listener ->
-  `ssh` in.
+  idempotent, so a persisted volume or rotated key just works) -> reconcile the adb tunnel (no-op if
+  disabled, and a no-op if already alive and forwarding the right port) -> start the code-bridge
+  listener -> `ssh` in. `ensure_up` runs for both `bsdev up` and plain `bsdev`, so a second session
+  (a new terminal/tab opened while a first is still using the tunnel) doesn't disrupt it.
 - **`code .` cold-launch**: the launcher runs a host TCP listener on `127.0.0.1:9918` and the ssh
   session reverse-forwards it (`-R`) into the container. The `image/code` shim writes
   `<dir|file> <abs-path>` to that port; the host listener opens it via VSCode **Dev Containers
   attach** (`code --folder-uri vscode-remote://attached-container+<hex(container)>/<path>`) - no
   ssh config, no Remote-SSH. Requires the host's VSCode + Dev Containers extension.
+- **adb passthrough** (`adbtunnel.rs`, opt-in via `bsdev adb [<port>]`): once you `code .` and close
+  the terminal `bsdev` was launched from, VSCode's own integrated terminals attach to the container
+  directly (`docker exec`-style), not through that ssh session - so adb forwarding can't ride the
+  interactive `connect` session the way the code-bridge does. Instead `adbtunnel::start` runs a
+  second, fully **detached** `ssh -N -R 127.0.0.1:<port>:127.0.0.1:<port>` (via
+  `process::spawn_detached`: no inherited stdio, `DETACHED_PROCESS`/`CREATE_NEW_PROCESS_GROUP` on
+  Windows, a fresh `process_group` on Unix), tracked by a PID file
+  (`Settings::adb_tunnel_pid_path`, storing `<pid>:<port>` so a changed port is detected too).
+  `adbtunnel::start` only kills-and-respawns when the tracked PID is missing/dead or forwarding the
+  wrong port (`adbtunnel::is_alive`, shelling out to `tasklist`/`kill -0`) - restarting unconditionally
+  on every `bsdev`/`bsdev up` would sever any adb command in flight through an already-good tunnel
+  the moment a second session started. `down`/`rebuild`/`reset` call `adbtunnel::stop` unconditionally.
+  The container's `adb` client (from `android-sdk-platform-tools`, already in the image) just connects
+  to its default `127.0.0.1:5037`, which the tunnel makes real - no `ADB_SERVER_SOCKET`, no Docker
+  networking (`host.docker.internal`/`host-gateway`) needed, and the host's adb server never needs to
+  bind beyond loopback. Requires `adb start-server` already running on the host.
 - **Provisioning is NOT in this repo.** The image is batteries-included; user-specific setup (gh
   auth + `chezmoi init --apply`) is done once inside the container by
   `bootstrap/bootstrap-bsdev.sh` in the separate `shoddyguard/portable_config` chezmoi repo.
