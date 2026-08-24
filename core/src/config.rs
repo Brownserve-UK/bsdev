@@ -21,6 +21,10 @@ pub struct Config {
     /// disables the tunnel.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adb_port: Option<u16>,
+    /// Whether Docker-in-Docker is enabled for the container (see `Settings::dind` /
+    /// `docker::run_args`). Unset (or `Some(false)`) disables it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dind: Option<bool>,
 }
 
 impl Config {
@@ -64,7 +68,7 @@ mod tests {
     #[test]
     fn save_then_load_round_trips() {
         let dir = temp_state_dir("roundtrip");
-        let config = Config { repos_dir: Some(PathBuf::from("/some/host/path")), adb_port: Some(5037) };
+        let config = Config { repos_dir: Some(PathBuf::from("/some/host/path")), adb_port: Some(5037), dind: Some(true) };
         config.save(&dir).unwrap();
         assert_eq!(Config::load(&dir).unwrap(), config);
         fs::remove_dir_all(&dir).ok();
@@ -75,6 +79,14 @@ mod tests {
         let dir = temp_state_dir("forward-compat");
         fs::write(dir.join(CONFIG_FILE), r#"{"repos_dir":"/x","future_setting":42}"#).unwrap();
         assert_eq!(Config::load(&dir).unwrap().repos_dir, Some(PathBuf::from("/x")));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn dind_defaults_to_none_when_absent() {
+        let dir = temp_state_dir("dind-absent");
+        fs::write(dir.join(CONFIG_FILE), r#"{"repos_dir":"/x"}"#).unwrap();
+        assert_eq!(Config::load(&dir).unwrap().dind, None);
         fs::remove_dir_all(&dir).ok();
     }
 }

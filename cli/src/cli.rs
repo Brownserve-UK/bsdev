@@ -32,6 +32,8 @@ pub enum Command {
     /// Show image, container and home volume state.
     Status,
     /// Pull the latest image and recreate the container (keeps the home volume).
+    /// Also applies a changed `bsdev dind` setting, since `--privileged`
+    /// requires recreating the container.
     Rebuild,
     /// Delete the container and its home volume for a clean slate (destructive).
     Reset {
@@ -78,6 +80,20 @@ pub enum Command {
         #[arg(long)]
         stop: bool,
     },
+    /// Get or persist whether Docker-in-Docker is enabled.
+    ///
+    /// With no arguments, prints the currently persisted value (default:
+    /// disabled). Pass `enable` or `disable` to persist a new value;
+    /// `BSDEV_DIND` overrides it for a single run. Changing this has no
+    /// effect on an existing container until `bsdev rebuild` recreates it -
+    /// `--privileged` cannot be toggled on a running container.
+    Dind {
+        /// "enable" or "disable" Docker-in-Docker.
+        value: Option<String>,
+        /// Clear the persisted setting (equivalent to "disable").
+        #[arg(long, conflicts_with = "value")]
+        unset: bool,
+    },
 }
 
 #[cfg(test)]
@@ -103,5 +119,22 @@ mod tests {
     #[test]
     fn rejects_unknown_update_arguments() {
         assert!(Cli::try_parse_from(["bsdev", "update", "--unknown"]).is_err());
+    }
+
+    #[test]
+    fn parses_dind_enable() {
+        let cli = Cli::try_parse_from(["bsdev", "dind", "enable"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Dind { value: Some(v), unset: false }) if v == "enable"));
+    }
+
+    #[test]
+    fn parses_dind_unset() {
+        let cli = Cli::try_parse_from(["bsdev", "dind", "--unset"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Dind { value: None, unset: true })));
+    }
+
+    #[test]
+    fn rejects_dind_value_and_unset_together() {
+        assert!(Cli::try_parse_from(["bsdev", "dind", "enable", "--unset"]).is_err());
     }
 }

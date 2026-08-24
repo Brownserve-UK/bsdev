@@ -41,6 +41,16 @@ pub struct Settings {
     /// Resolved from `BSDEV_ADB_PORT` if set, else from the persisted config
     /// written by `bsdev adb [<port>]` (see `Settings::persist_adb_port`).
     pub adb_port: Option<u16>,
+    /// Whether to run the container with Docker-in-Docker support
+    /// (`--privileged` + a dedicated `bsdev-docker` volume at
+    /// `/var/lib/docker`, with `dockerd` started by the entrypoint).
+    /// Off by default. Resolved from `BSDEV_DIND` if set, else from the
+    /// persisted config written by `bsdev dind enable|disable` (see
+    /// `Settings::persist_dind`).
+    pub dind: bool,
+    /// Named volume mounted at `/var/lib/docker` inside the container when
+    /// `dind` is enabled.
+    pub docker_volume: String,
 }
 
 impl Settings {
@@ -65,6 +75,12 @@ impl Settings {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .or(config.adb_port),
+            dind: std::env::var("BSDEV_DIND")
+                .ok()
+                .and_then(|s| parse_bool(&s))
+                .or(config.dind)
+                .unwrap_or(false),
+            docker_volume: "bsdev-docker".to_string(),
         })
     }
 
@@ -84,6 +100,12 @@ impl Settings {
         self.repos_dir
             .as_ref()
             .map(|d| format!("{}:{}/host-repos", d.display(), self.container_home()))
+    }
+
+    /// The `-v` "source:target" spec for the DinD Docker data volume, only
+    /// meaningful when `dind` is enabled.
+    pub fn docker_data_mount(&self) -> String {
+        format!("{}:/var/lib/docker", self.docker_volume)
     }
 
     /// Path to the public half of `key_path` (`<key_path>.pub`).
@@ -152,10 +174,59 @@ impl Settings {
     pub fn forward_pid_path(&self, port: u16) -> PathBuf {
         self.key_path.with_file_name(format!("forward-{port}.pid"))
     }
+
+    /// Persist `enabled` as the dind setting, so future runs pick it up without
+    /// `BSDEV_DIND` being set (that env var still overrides it for a single run).
+    /// Requires `bsdev rebuild` to take effect on an existing container.
+    pub fn persist_dind(enabled: bool) -> Result<()> {
+        let state = state_dir()?;
+        let mut config = Config::load(&state)?;
+        config.dind = Some(enabled);
+        config.save(&state)
+    }
+
+    /// The currently persisted dind setting, if any (ignores `BSDEV_DIND`).
+    pub fn persisted_dind() -> Result<Option<bool>> {
+        Ok(Config::load(&state_dir()?)?.dind)
+    }
+
+    /// Remove the persisted dind setting from the config file (equivalent to disabled).
+    pub fn clear_persisted_dind() -> Result<()> {
+        let state = state_dir()?;
+        let mut config = Config::load(&state)?;
+        config.dind = None;
+        config.save(&state)
+    }
 }
 
 fn env_or(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_string())
+}
+
+fn parse_bool(s: &str) -> Option<bool> {
+    match s.to_ascii_lowercase().as_str() {
+        "1" | "true" | "on" | "yes" => Some(true),
+        "0" | "false" | "off" | "no" => Some(false),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_bool_accepts_common_forms() {
+        assert_eq!(parse_bool("1"), Some(true));
+        assert_eq!(parse_bool("TRUE"), Some(true));
+        assert_eq!(parse_bool("on"), Some(true));
+        assert_eq!(parse_bool("yes"), Some(true));
+        assert_eq!(parse_bool("0"), Some(false));
+        assert_eq!(parse_bool("false"), Some(false));
+        assert_eq!(parse_bool("off"), Some(false));
+        assert_eq!(parse_bool("no"), Some(false));
+        assert_eq!(parse_bool("garbage"), None);
+    }
 }
 
 /// Machine-local state dir (e.g. ~/.local/share/bsdev, %LOCALAPPDATA%\bsdev\data),

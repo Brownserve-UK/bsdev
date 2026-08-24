@@ -31,4 +31,12 @@ if [ -n "${BSDEV_HOST_HOSTNAME:-}" ]; then
     chmod 0644 /etc/bsdev-host-hostname
 fi
 
+if [ "${BSDEV_DIND:-}" = "1" ]; then
+    dockerd >/var/log/dockerd.log 2>&1 &
+    for _ in $(seq 1 30); do
+        [ -S /var/run/docker.sock ] && break
+        sleep 0.5
+    done
+fi
+
 exec /usr/bin/sshd -D -e
