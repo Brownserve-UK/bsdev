@@ -46,6 +46,7 @@ fn main() -> Result<()> {
         Some(Command::Repos { path, unset }) => repos(path, unset),
         Some(Command::Adb { port, unset }) => adb(port, unset),
         Some(Command::Forward { port, stop }) => forward_port(&settings, port, stop, verbose),
+        Some(Command::Dind { value, unset }) => dind(value, unset),
     }
 }
 
@@ -173,6 +174,11 @@ fn status(settings: &Settings) -> Result<()> {
         Some(port) => println!("adb:       forwarding host port {port}"),
         None => println!("adb:       disabled"),
     }
+    println!("dind:      {}", if settings.dind { "enabled" } else { "disabled" });
+    if settings.dind {
+        let docker_vol = if docker::volume_present(&settings.docker_volume)? { "present" } else { "missing" };
+        println!("docker vol: {} ({})", settings.docker_volume, docker_vol);
+    }
     Ok(())
 }
 
@@ -189,8 +195,10 @@ fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
         != ContainerState::Missing;
     let home_exists =
         docker::volume_present(&settings.volume).context("Failed to inspect the bsdev home volume")?;
+    let docker_vol_exists =
+        docker::volume_present(&settings.docker_volume).context("Failed to inspect the bsdev docker volume")?;
 
-    if !container_exists && !home_exists {
+    if !container_exists && !home_exists && !docker_vol_exists {
         println!("Nothing to reset - no bsdev container or home volume exist.");
         return Ok(());
     }
@@ -205,6 +213,9 @@ fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
                 "  - the '{}' home volume (ALL repos, provisioning and data)",
                 settings.volume
             );
+        }
+        if docker_vol_exists {
+            eprintln!("  - the '{}' Docker-in-Docker data volume", settings.docker_volume);
         }
         if let Some(repos_dir) = &settings.repos_dir {
             eprintln!("  (the repos directory at {} is left untouched)", repos_dir.display());
@@ -225,6 +236,10 @@ fn reset(settings: &Settings, verbose: bool, yes: bool) -> Result<()> {
     if home_exists {
         println!("Removing the '{}' home volume ...", settings.volume);
         docker::remove_volume(&settings.volume, verbose).context("Failed to remove the home volume")?;
+    }
+    if docker_vol_exists {
+        println!("Removing the '{}' Docker-in-Docker data volume ...", settings.docker_volume);
+        docker::remove_volume(&settings.docker_volume, verbose).context("Failed to remove the docker volume")?;
     }
     println!("Reset complete. Run `bsdev` to start fresh.");
     Ok(())
@@ -274,6 +289,38 @@ fn adb(port: Option<u16>, unset: bool) -> Result<()> {
         None => println!(
             "No adb port persisted. Run `bsdev adb [<port>]` to set one (defaults to {DEFAULT_ADB_PORT}), or set BSDEV_ADB_PORT to override for a single run."
         ),
+    }
+    Ok(())
+}
+
+/// Get or persist whether Docker-in-Docker is enabled (see
+/// `Settings::persist_dind`). Takes effect on the next `bsdev rebuild` -
+/// unlike `repos`/`adb`, this cannot be applied to a running/stopped
+/// container in place (`--privileged` is set at container-creation time).
+fn dind(value: Option<String>, unset: bool) -> Result<()> {
+    if unset {
+        Settings::clear_persisted_dind().context("Failed to clear the persisted dind setting")?;
+        println!("Cleared the persisted dind setting (disabled). Run `bsdev rebuild` to apply.");
+        return Ok(());
+    }
+
+    if let Some(value) = value {
+        let enabled = match value.to_ascii_lowercase().as_str() {
+            "enable" | "true" | "1" | "yes" | "on" => true,
+            "disable" | "false" | "0" | "no" | "off" => false,
+            _ => anyhow::bail!("Expected `enable` or `disable`, got `{value}`"),
+        };
+        Settings::persist_dind(enabled).context("Failed to persist the dind setting")?;
+        let word = if enabled { "enabled" } else { "disabled" };
+        println!("Docker-in-Docker {word}. Run `bsdev rebuild` to apply (this cannot be applied to an existing container in place).");
+        return Ok(());
+    }
+
+    match Settings::persisted_dind().context("Failed to read the persisted dind setting")? {
+        Some(true) => println!("enabled"),
+        Some(false) | None => {
+            println!("disabled (default). Run `bsdev dind enable` to enable, then `bsdev rebuild` to apply.")
+        }
     }
     Ok(())
 }
