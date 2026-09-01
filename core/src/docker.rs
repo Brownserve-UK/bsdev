@@ -137,6 +137,23 @@ pub fn ensure_authorized_key(settings: &Settings, pubkey: &str, verbose: bool) -
     )
 }
 
+pub fn prune_vscode_server(settings: &Settings, verbose: bool) -> Result<()> {
+    let script = r#"dir=~/.vscode-server/bin; [ -d "$dir" ] && ls -1t "$dir" | tail -n +2 | while read -r old; do rm -rf "$dir/$old"; done; true"#;
+    process::run(
+        DOCKER,
+        [
+            "exec",
+            "-u",
+            settings.user.as_str(),
+            settings.container.as_str(),
+            "bash",
+            "-c",
+            script,
+        ],
+        verbose,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
