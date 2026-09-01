@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "bsdev"
-version = "0.10.0"
+version = "0.9.1"
 dependencies = [
  "anyhow",
  "bsdev-core",
@@ -157,7 +157,7 @@ dependencies = [
 
 [[package]]
 name = "bsdev-core"
-version = "0.10.0"
+version = "0.9.1"
 dependencies = [
  "directories",
  "hostname",
