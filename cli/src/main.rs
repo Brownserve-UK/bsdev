@@ -81,6 +81,10 @@ fn ensure_up(settings: &Settings, verbose: bool) -> Result<()> {
     docker::ensure_authorized_key(settings, &pubkey, verbose)
         .context("Failed to authorize the bsdev key in the container")?;
 
+    if let Err(e) = docker::prune_vscode_server(settings, verbose) {
+        eprintln!("Warning: failed to prune old VS Code Server versions: {e}");
+    }
+
     // Restart the background adb tunnel (see `adbtunnel::start`) so it's alive
     // for the container's whole session, independent of any connect session -
     // a no-op unless an adb port is configured. The container's StartedAt is
