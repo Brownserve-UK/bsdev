@@ -32,11 +32,21 @@ if [ -n "${BSDEV_HOST_HOSTNAME:-}" ]; then
 fi
 
 if [ "${BSDEV_DIND:-}" = "1" ]; then
+    rm -f /var/run/docker.pid /var/run/docker.sock /var/run/docker/containerd/containerd.pid
+
     dockerd >/var/log/dockerd.log 2>&1 &
-    for _ in $(seq 1 30); do
-        [ -S /var/run/docker.sock ] && break
+
+    dind_ready=""
+    for _ in $(seq 1 60); do
+        if docker version >/dev/null 2>&1; then
+            dind_ready=1
+            break
+        fi
         sleep 0.5
     done
+    if [ -z "$dind_ready" ]; then
+        echo "bsdev: dockerd failed to start, see /var/log/dockerd.log" >&2
+    fi
 fi
 
 exec /usr/bin/sshd -D -e
