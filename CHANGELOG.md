@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release
 
+## [v0.10.0](https://github.com/Brownserve-UK/bsdev/tree/v0.10.0) (2026-09-01)
+
+### Fixed
+
+- fix: dind check was too sticky in [#43](https://github.com/Brownserve-UK/bsdev/pull/43) by [@shoddyguard](https://github.com/shoddyguard)
+
+
 ## [v0.9.0](https://github.com/Brownserve-UK/bsdev/tree/v0.9.0) (2026-08-24)
 
 ### Added
