@@ -26,3 +26,4 @@ target/
 .docker/
 
 ## Manually defined ignores: ##
+image/proto/node_modules/

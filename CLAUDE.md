@@ -50,6 +50,9 @@ host's VSCode.
   - `bsdev-entrypoint.sh` - installs the host pubkey into `authorized_keys`, then `exec sshd -D`.
   - `code` - in-container `code` shim (bash; sends the path over the reverse channel).
   - `fish-cargo-path.fish` - puts `~/.cargo/bin` on PATH for fish.
+  - `proto/` - `bsdev-proto` (installed at `/opt/bsdev-proto`, on PATH): a Node CLI
+    (`bin/bsdev-proto.mjs`) driving Vite's JS API, with a lockfile-pinned runtime (React, Tailwind
+    v4, lucide-react, motion, recharts, clsx, fontsource). See "Design prototypes" below.
 - `.build/` + `.github/` - Brownserve "RustApp" scaffold (PowerShell/Invoke-Build + CI). Do not
   hand-edit the scaffold unless necessary.
 
@@ -82,6 +85,14 @@ host's VSCode.
   to its default `127.0.0.1:5037`, which the tunnel makes real - no `ADB_SERVER_SOCKET`, no Docker
   networking (`host.docker.internal`/`host-gateway`) needed, and the host's adb server never needs to
   bind beyond loopback. Requires `adb start-server` already running on the host.
+- **Design prototypes** (`image/proto/`): `bsdev-proto start` serves `<repo>/.agents/prototypes`
+  on `127.0.0.1:5199` (next free port if taken) in a detached Vite server, idempotently, printing
+  the URL last. Bare imports from prototypes are resolved against `/opt/bsdev-proto/node_modules`
+  (a pre-resolve plugin for JS, file aliases for CSS packages such as `tailwindcss`), and the Vite
+  cache/state/logs go to `~/.cache/bsdev-proto`, so nothing lands in the repo. Polling is used
+  under `~/host-repos`. Host access: VSCode auto-forwards the port (and `start` runs `$BROWSER`);
+  from a bare session use `bsdev forward <port>`. No Rust changes involved. Keep the
+  `package.json` versions older than a day, as the image sets npm `min-release-age 1`.
 - **Provisioning is NOT in this repo.** The image is batteries-included; user-specific setup (gh
   auth + `chezmoi init --apply`) is done once inside the container by
   `bootstrap/bootstrap-bsdev.sh` in the separate `shoddyguard/portable_config` chezmoi repo.

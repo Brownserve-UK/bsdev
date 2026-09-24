@@ -104,6 +104,13 @@ RUN chmod 0644 /etc/fish/conf.d/bsdev-cargo-path.fish
 COPY fish-android-path.fish /etc/fish/conf.d/bsdev-android-path.fish
 RUN chmod 0644 /etc/fish/conf.d/bsdev-android-path.fish
 
+# Our prototype tool, basically our implementation of Claude's design tool
+COPY proto /opt/bsdev-proto
+RUN cd /opt/bsdev-proto && npm ci --omit=dev --no-audit --no-fund \
+    && chmod 0755 bin/bsdev-proto.mjs \
+    && ln -s /opt/bsdev-proto/bin/bsdev-proto.mjs /usr/local/bin/bsdev-proto \
+    && chmod -R a+rX /opt/bsdev-proto
+
 # Tell VSCode Dev Containers to attach as `bsdev`. The container's default user is
 # root (so sshd can run as PID 1), but "Attach to Running Container" would then run
 # as root and read /root/.gitconfig instead of bsdev's chezmoi config. This label
