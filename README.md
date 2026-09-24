@@ -20,6 +20,7 @@ The container comes with:
 - Claude Code
 - JDK
 - Android SDK
+- `bsdev-proto` (live-reloading design prototype server)
 
 ## Install
 
@@ -97,6 +98,11 @@ even in a VSCode terminal after you've closed the terminal `bsdev` was launched
 from. Requires `adb start-server` already running on the host. Off by default;
 `bsdev adb --unset` disables it, and `bsdev adb` with no arguments shows the
 current port.
+
+For design work, `bsdev-proto start` inside the container serves the repo's
+`.agents/prototypes` folder with live reload on port 5199. In a VSCode terminal
+it opens in your host browser; from a plain `bsdev` session, run
+`bsdev forward 5199` on the host. See [image/proto](image/proto/README.md).
 
 ## Building
 
