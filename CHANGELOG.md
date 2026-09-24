@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Release
 
+## [v0.10.0](https://github.com/Brownserve-UK/bsdev/tree/v0.10.0) (2026-09-24)
+
+### Added
+
+- feat: clean-up VSCode server versions in [#45](https://github.com/Brownserve-UK/bsdev/pull/45) by [@shoddyguard](https://github.com/shoddyguard)
+
+
 ## [v0.9.1](https://github.com/Brownserve-UK/bsdev/tree/v0.9.1) (2026-09-01)
 
 ### Fixed
