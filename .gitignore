@@ -11,6 +11,8 @@ paket-files/
 .tmp/
 
 # AI coding tool directories contain local/personal configuration and session data that should not be committed.
+.agents/*
+!.agents/project.json
 .claude/
 .cursor/
 .aider*
